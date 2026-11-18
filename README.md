@@ -54,7 +54,7 @@ ctest --test-dir build --output-on-failure
 
 The simulation suite checks all twelve levels for five seconds of pre-shot stability and verifies recorded winning sequences, star ratings, retries, finite physics, launch constraints, abilities, loss, unlocks, save round trips, and corrupt-save rejection. The UI test exercises play → pause → resume → retry → win → results → next level, map locks, help, audio, and loss → retry using internal controls, without desktop automation. Render previews export the renderer's own textures for all menus and all twelve levels.
 
-To include the graphical UI test in CTest, configure with `-DSLINGSHOT_UI_TESTS=ON`. On headless Linux, run it under `xvfb-run -a`. GitHub Actions builds and tests on macOS and Ubuntu.
+To include the graphical UI test in CTest, configure with `-DSLINGSHOT_UI_TESTS=ON`. On headless Linux, run it under `xvfb-run -a`. GitHub Actions builds and runs simulation tests on macOS and Ubuntu. Graphical UI tests run under a virtual display on Ubuntu; hosted macOS runners have no usable OpenGL display. Local macOS UI tests also run under address and undefined-behavior sanitizers.
 
 Development shortcuts: `--demo` starts without player saves; `--level 1` through `--level 12` open a level directly. Invalid options exit with code 2.
 

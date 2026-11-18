@@ -19,7 +19,7 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y libasound2-dev libx11-dev libxrandr-dev libxi-dev libgl1-mesa-dev libglu1-mesa-dev libxcursor-dev libxinerama-dev xvfb
       - name: Configure
-        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DSLINGSHOT_UI_TESTS=ON
+        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DSLINGSHOT_UI_TESTS=${{ runner.os == 'Linux' && 'ON' || 'OFF' }}
       - name: Build
         run: cmake --build build --parallel 4
       - name: Verify on macOS
@@ -30,7 +30,7 @@ jobs:
         run: xvfb-run -a ctest --test-dir build --output-on-failure
       - name: Package macOS app
         if: runner.os == 'macOS'
-        run: scripts/package.sh
+        run: scripts/package.sh --skip-ui
       - uses: actions/upload-artifact@v4
         if: runner.os == 'macOS'
         with:

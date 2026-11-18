@@ -2,5 +2,5 @@ Bangers: Copyright 2010 The Bangers Project Authors (https://github.com/googlefo
 Nunito: SIL Open Font License; see Nunito-OFL.txt. Nunito-Bold.ttf is a static weight-750 instance of the Google Fonts variable font, generated with FontTools.
 raylib 5.5: zlib/libpng license; see raylib-LICENSE.txt.
 Box2D 3.1.1: MIT license; see box2d-LICENSE.txt.
-Background panoramas and character atlas: generated for this project using the built-in image generation tool. See docs/art-direction.md for prompts and references.
+Background panoramas, character atlas and material atlas: generated for this project using the built-in image generation tool. See docs/art-direction.md for prompts and references.
 This is a fan-made game, not an official Rovio product. Angry Birds names and character identities belong to their respective owners.

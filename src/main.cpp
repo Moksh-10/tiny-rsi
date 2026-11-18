@@ -221,6 +221,9 @@ void Application::home(Vector2 mouse, bool pressed) {
         art.label(TextFormat("%i / 36", progress.totalStars()), 1010, 79, 16, paper);
     }
     art.label("DRAG TO AIM  /  RELEASE TO FLY", 1070, 675, 16, paper, false, true);
+    art.label("EXIT", 104, 675, 17, paper);
+    if (pressed && CheckCollisionPointRec(mouse, {100, 665, 65, 36}))
+        quitting = true;
     if (IsKeyPressed(KEY_ENTER) || IsKeyPressed(KEY_SPACE))
         start(next);
 }
@@ -679,6 +682,10 @@ int main(int argc, char **argv) {
     SetTraceLogLevel(LOG_WARNING);
     SetConfigFlags(FLAG_WINDOW_RESIZABLE | FLAG_MSAA_4X_HINT | FLAG_VSYNC_HINT);
     InitWindow(screenWidth, screenHeight, "Angry Birds - Slingshot Valley");
+    if (!IsWindowReady()) {
+        std::cerr << "A working OpenGL display is required to start Slingshot Valley.\n";
+        return 1;
+    }
     SetWindowMinSize(960, 540);
     SetExitKey(KEY_NULL);
     SetTargetFPS(60);
@@ -688,7 +695,17 @@ int main(int argc, char **argv) {
     auto assets = appDirectory / "assets";
     if (!std::filesystem::exists(assets))
         assets = ASSET_SOURCE_DIR;
-    {
+    for (const auto *required : {"meadow.png", "canyon.png", "night.png", "characters.png", "materials.png",
+                                 "Bangers-Regular.ttf", "Nunito-Bold.ttf"}) {
+        if (!std::filesystem::is_regular_file(assets / required)) {
+            std::cerr << "Missing game asset: " << (assets / required) << '\n';
+            UnloadRenderTexture(target);
+            CloseWindow();
+            return 1;
+        }
+    }
+    int exitCode = 0;
+    try {
         std::filesystem::path savePath = appDirectory / "progress.dat";
 #if defined(__APPLE__)
         if (const char *userHome = std::getenv("HOME"))
@@ -710,6 +727,7 @@ int main(int argc, char **argv) {
                 app.testFlow();
             } catch (const std::exception &error) {
                 std::cerr << "UI test failed: " << error.what() << '\n';
+                EndTextureMode();
                 throw;
             }
             EndTextureMode();
@@ -764,7 +782,11 @@ int main(int argc, char **argv) {
                     break;
             }
         }
+    } catch (const std::exception &error) {
+        std::cerr << "Game error: " << error.what() << '\n';
+        exitCode = 1;
     }
     UnloadRenderTexture(target);
     CloseWindow();
+    return exitCode;
 }

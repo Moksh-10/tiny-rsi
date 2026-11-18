@@ -21,7 +21,6 @@ class Art {
     void bird(Vector2 p, float radius, BirdType type, float rotation = 0, bool action = false) const;
     void pig(Vector2 p, float radius, float rotation = 0, bool hurt = false) const;
     void block(const Simulation &game, const Entity &e) const;
-    void preview(const Level &level, Rectangle area) const;
     bool button(Rectangle rect, const char *caption, Vector2 mouse, bool click, Color fill,
                 bool enabled = true, bool display = true) const;
     bool iconButton(Vector2 center, int icon, Vector2 mouse, bool click, bool active = false) const;
@@ -32,6 +31,7 @@ class Art {
   private:
     std::array<Texture2D, 3> scenery{};
     std::array<Texture2D, 8> characters{};
+    std::array<Texture2D, 4> materials{};
     Font heading{}, body{};
 };
 struct Particle {

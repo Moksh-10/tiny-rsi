@@ -36,6 +36,22 @@ Art::Art(const std::filesystem::path &assets) {
             UnloadImage(cell);
         }
     UnloadImage(atlas);
+    auto materialAtlas = LoadImage((assets / "materials.png").string().c_str());
+    if (!materialAtlas.data)
+        throw std::runtime_error("Material atlas could not be loaded");
+    const int materialWidth = materialAtlas.width / 2, materialHeight = materialAtlas.height / 2;
+    for (int row = 0; row < 2; row++)
+        for (int column = 0; column < 2; column++) {
+            auto cell =
+                ImageFromImage(materialAtlas, {float(column * materialWidth), float(row * materialHeight),
+                                               float(materialWidth), float(materialHeight)});
+            ImageCrop(&cell, GetImageAlphaBorder(cell, .08f));
+            ImageResize(&cell, 128, 128);
+            materials[row * 2 + column] = LoadTextureFromImage(cell);
+            SetTextureFilter(materials[row * 2 + column], TEXTURE_FILTER_BILINEAR);
+            UnloadImage(cell);
+        }
+    UnloadImage(materialAtlas);
 
     int i = 0;
     for (const auto *name : {"meadow.png", "canyon.png", "night.png"}) {
@@ -56,6 +72,9 @@ Art::~Art() {
         if (tex.id)
             UnloadTexture(tex);
     for (auto tex : characters)
+        if (tex.id)
+            UnloadTexture(tex);
+    for (auto tex : materials)
         if (tex.id)
             UnloadTexture(tex);
     UnloadFont(heading);
@@ -114,79 +133,33 @@ void Art::block(const Simulation &game, const Entity &e) const {
     rlPushMatrix();
     rlTranslatef(pos.x, pos.y, 0);
     rlRotatef(game.angle(e) * RAD2DEG, 0, 0, 1);
-    float w = e.width, h = e.height;
-    Color base, light, dark;
-    if (e.kind == Kind::Glass) {
-        base = {109, 214, 230, 220};
-        light = {207, 254, 255, 230};
-        dark = {43, 128, 166, 255};
-    } else if (e.kind == Kind::Stone || e.kind == Kind::Platform) {
-        base = {142, 151, 167, 255};
-        light = {189, 198, 206, 255};
-        dark = {77, 86, 108, 255};
+    const float w = e.width, h = e.height;
+    int index = e.kind == Kind::Wood ? 0 : e.kind == Kind::Glass ? 2 : e.kind == Kind::Tnt ? 3 : 1;
+    auto texture = materials[index];
+    Rectangle source{0, 0, float(texture.width), float(texture.height)};
+    if (e.kind == Kind::Platform) {
+        // Tile masonry instead of stretching a single rock across a whole cliff.
+        for (float x = -w / 2; x < w / 2; x += 64)
+            for (float y = -h / 2; y < h / 2; y += 64)
+                DrawTexturePro(texture, source,
+                               {x, y, std::min(64.0f, w / 2 - x), std::min(64.0f, h / 2 - y)}, {}, 0, WHITE);
     } else if (e.kind == Kind::Tnt) {
-        base = {211, 62, 50, 255};
-        light = {255, 113, 73, 255};
-        dark = {113, 41, 38, 255};
+        DrawTexturePro(texture, source, {-w / 2, -h * .64f, w, h * 1.14f}, {}, 0, WHITE);
     } else {
-        base = {203, 140, 66, 255};
-        light = {246, 190, 106, 255};
-        dark = {120, 74, 39, 255};
-    }
-    DrawRectangleRec({-w / 2 - 1, -h / 2 - 1, w + 2, h + 2}, outline);
-    DrawRectangleRec({-w / 2, -h / 2, w, h}, dark);
-    DrawRectangleRec({-w / 2 + 2, -h / 2 + 2, w - 4, h - 4}, base);
-    line({-w / 2 + 3, -h / 2 + 3}, {w / 2 - 3, -h / 2 + 3}, 2, light);
-    line({-w / 2 + 3, -h / 2 + 3}, {-w / 2 + 3, h / 2 - 3}, 2, light);
-    if (e.kind == Kind::Wood) {
-        if (w > h) {
-            line({-w / 2 + 7, 0}, {w / 2 - 7, 1}, 1.5f, dark);
-            line({-w / 2 + 12, 3}, {w / 4, 4}, 1, light);
-            for (float x : {-w / 2 + 6, w / 2 - 6})
-                DrawCircleV({x, 0}, 1.4f, dark);
-        } else {
-            line({0, -h / 2 + 8}, {1, h / 2 - 8}, 1.5f, dark);
-            line({4, -h / 4}, {3, h / 2 - 12}, 1, light);
-            DrawEllipse(0, static_cast<int>(h / 5), 3, 6, dark);
-            DrawEllipse(0, static_cast<int>(h / 5), 1.5f, 4, base);
-        }
-    } else if (e.kind == Kind::Glass) {
-        line({-w / 2 + 4, h / 2 - 5}, {w / 2 - 4, -h / 2 + 5}, 2, light);
-        line({-w / 2 + 5, -h / 2 + 5}, {w / 2 - 5, -h / 2 + 5}, 1, WHITE);
-    } else if (e.kind == Kind::Tnt) {
-        DrawRectangleRec({-w / 2 + 3, -10, w - 6, 20}, paper);
-        label("TNT", 0, -10, 19, outline, true, true);
-        line({0, -h / 2}, {4, -h / 2 - 8}, 3, outline);
-        DrawCircle(4, static_cast<int>(-h / 2 - 9), 3, gold);
-    } else {
-        line({-w / 2 + 5, h / 4}, {w / 2 - 4, h / 4}, 1, dark);
-        line({w / 5, -h / 2 + 4}, {w / 5, h / 4}, 1, dark);
+        NPatchInfo patch{source, 6, 6, 6, 6, NPATCH_NINE_PATCH};
+        if (e.kind == Kind::Wood && w > h) {
+            rlPushMatrix();
+            rlRotatef(90, 0, 0, 1);
+            DrawTextureNPatch(texture, patch, {-h / 2, -w / 2, h, w}, {}, 0, WHITE);
+            rlPopMatrix();
+        } else
+            DrawTextureNPatch(texture, patch, {-w / 2, -h / 2, w, h}, {}, 0, WHITE);
     }
     if (e.health < e.maxHealth * .65f) {
         line({-3, -h * .35f}, {4, 0}, 2, outline);
         line({4, 0}, {-3, h * .3f}, 2, outline);
     }
     rlPopMatrix();
-}
-void Art::preview(const Level &level, Rectangle area) const {
-    const float zoom = area.width / 570;
-    for (auto p : level.objects) {
-        Vector2 at{area.x + (p.x - 680) * zoom, area.y + area.height - (620 - p.y) * zoom};
-        if (p.kind == Kind::Pig)
-            pig(at, p.width * zoom / 2);
-        else {
-            Color c = p.kind == Kind::Glass   ? Color{119, 220, 235, 255}
-                      : p.kind == Kind::Stone ? Color{147, 158, 174, 255}
-                      : p.kind == Kind::Tnt   ? Color{218, 70, 50, 255}
-                                              : Color{212, 151, 76, 255};
-            DrawRectangleRec(
-                {at.x - p.width * zoom / 2, at.y - p.height * zoom / 2, p.width * zoom, p.height * zoom},
-                outline);
-            DrawRectangleRec({at.x - p.width * zoom / 2 + 1, at.y - p.height * zoom / 2 + 1,
-                              p.width * zoom - 2, p.height * zoom - 2},
-                             c);
-        }
-    }
 }
 void Art::panel(Rectangle r) const {
     DrawRectangleRounded({r.x, r.y + 8, r.width, r.height}, .1f, 12, Fade(outline, .3f));

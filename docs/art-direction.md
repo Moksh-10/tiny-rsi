@@ -37,6 +37,14 @@ Prompt:
 
 ## Other art and sound
 
-Material surfaces, UI, slingshot, particles, typography layout, and star shapes are rendered in C++. Sound effects and three looping musical cues are synthesized at startup; no third-party recordings are used. The app icon is rendered from the same character atlas.
+Material artwork comes from the atlas described below. UI, slingshot, particles, typography layout, and star shapes are rendered in C++. Sound effects and three looping musical cues are synthesized at startup; no third-party recordings are used. The app icon is rendered from the same character atlas.
 
 Bangers and Nunito were downloaded from the official Google Fonts repository; their OFL licenses are in `assets/`. The Nunito variable font was instantiated at weight 750 to ensure legibility at small HUD sizes.
+
+### `assets/materials.png`
+
+Prompt:
+
+> Use case: stylized-concept. Asset type: production 2D game MATERIAL SPRITE ATLAS, exactly 2 columns by 2 rows in a square image, uniform square cells, transparent background, centered objects with 8 percent padding in every cell. For a beautifully illustrated cartoon slingshot physics game. TOP LEFT: one square honey golden WOODEN BLOCK, thick dark brown ink outline, beveled amber edges, hand painted warm wood grain and small knots, no cross straps, single coherent grain surface. TOP RIGHT: one square cool gray STONE BLOCK, dark blue gray outline, beveled chunky edges, lightly rough painted rock texture, a few fine cracks, soft highlights. BOTTOM LEFT: one square translucent icy cyan GLASS BLOCK with bright aqua beveled edges, crisp outline, diagonal white reflected highlights and a smooth blue transparent center. BOTTOM RIGHT: one square RED TNT CRATE, red painted wooden boards, bold dark border, pale ivory center paper label with exact text 'TNT' in chunky black lettering, top lid, small fuse at top. All objects viewed straight on in perfect flat orthographic front view; absolutely no 3D perspective or isometric angle. Match premium hand painted cartoon Angry Birds-style game art: sculpted painted texture and volume, crisp dark outlines, vibrant material readability, clean isolated complete objects. No additional objects, no ground, no shadows outside objects, no UI, no grid borders, no headings, no text except TNT label. Exact uniform grid.
+
+The material atlas is trimmed by alpha, resized in memory, and rendered with nine-patch scaling. Static platforms tile the stone material instead of stretching a single flat rectangle.
