@@ -1,4 +1,5 @@
 #include "world.hpp"
+#include "resources.hpp"
 #include "raymath.h"
 #include <cmath>
 #include <random>
@@ -18,7 +19,8 @@ Mesh rockMesh(const ascent::Rock&r){
 }
 }
 World::World(const std::vector<ascent::Rock>& terrain){
- shader=LoadShader(ASCENT_ASSET_DIR "/shaders/world.vs",ASCENT_ASSET_DIR "/shaders/world.fs");
+ std::string root=resourceRoot();
+ shader=LoadShader((root+"/shaders/world.vs").c_str(),(root+"/shaders/world.fs").c_str());
  sphere=LoadModelFromMesh(GenMeshSphere(1,14,20));cylinder=LoadModelFromMesh(GenMeshCylinder(1,1,16));cone=LoadModelFromMesh(GenMeshCone(1,1,10));cube=LoadModelFromMesh(GenMeshCube(1,1,1));
  for(auto*m:{&sphere,&cylinder,&cone,&cube})m->materials[0].shader=shader;
  for(const auto&r:terrain){Model model=LoadModelFromMesh(rockMesh(r));model.materials[0].shader=shader;objects.push_back({model,{0,0,0},stone(r.palette),1});}

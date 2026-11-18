@@ -1,4 +1,7 @@
 #include "world.hpp"
+#include "resources.hpp"
+#include "persistence.hpp"
+#include <cstdlib>
 #include "raymath.h"
 #include <algorithm>
 #include <array>
@@ -15,8 +18,10 @@ namespace {
 constexpr Color ivory{241,237,220,255}, muted{165,184,179,255}, gold{224,179,104,255}, dark{17,33,36,255};
 struct Fonts { Font body{},title{}; bool customBody=false,customTitle=false;
  Fonts(){body=GetFontDefault();title=body;
-  const char* sans[]={ASCENT_ASSET_DIR "/fonts/Inter.ttf","/System/Library/Fonts/Supplemental/Arial.ttf","/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf","C:/Windows/Fonts/segoeui.ttf"};
-  const char* serif[]={ASCENT_ASSET_DIR "/fonts/Newsreader.ttf","/System/Library/Fonts/Supplemental/Georgia.ttf","/usr/share/fonts/truetype/dejavu/DejaVuSerif.ttf","C:/Windows/Fonts/georgia.ttf"};
+  std::string root=resourceRoot()+"/fonts/";
+  std::string sansAsset=root+"Lato.ttf",serifAsset=root+"Lora.ttf";
+  const char* sans[]={sansAsset.c_str(),"/System/Library/Fonts/Supplemental/Arial.ttf","/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf","C:/Windows/Fonts/segoeui.ttf"};
+  const char* serif[]={serifAsset.c_str(),"/System/Library/Fonts/Supplemental/Georgia.ttf","/usr/share/fonts/truetype/dejavu/DejaVuSerif.ttf","C:/Windows/Fonts/georgia.ttf"};
   for(auto s:sans)if(FileExists(s)){body=LoadFontEx(s,64,nullptr,0);customBody=true;break;}
   for(auto s:serif)if(FileExists(s)){title=LoadFontEx(s,144,nullptr,0);customTitle=true;break;}
   SetTextureFilter(body.texture,TEXTURE_FILTER_BILINEAR);SetTextureFilter(title.texture,TEXTURE_FILTER_BILINEAR);
@@ -45,17 +50,8 @@ struct Audio {
  ~Audio(){if(ready){UnloadSound(wind);UnloadSound(hit);UnloadSound(grip);CloseAudioDevice();}}
 };
 struct Particle {ascent::Vec position,velocity;float life,size;};
-std::string savePath(){return std::string(GetApplicationDirectory())+"ascent.save";}
-void save(const ascent::Player&p,bool sound,float sensitivity){
- const std::string temp=savePath()+".tmp";std::ofstream f(temp);if(!f)return;
- f<<"ASCENT_1\n"<<p.position.x<<' '<<p.position.y<<' '<<p.best<<' '<<p.elapsed<<' '<<p.falls<<' '<<sound<<' '<<sensitivity<<'\n';f.close();std::error_code ec;std::filesystem::rename(temp,savePath(),ec);
-}
-bool load(ascent::Player&p,bool& sound,float& sensitivity,const std::vector<ascent::Rock>&terrain){
- std::ifstream f(savePath());std::string magic;ascent::Player v;bool s;float sense; if(!(f>>magic)||magic!="ASCENT_1"||!(f>>v.position.x>>v.position.y>>v.best>>v.elapsed>>v.falls>>s>>sense))return false;
- if(!std::isfinite(v.position.x)||!std::isfinite(v.position.y)||!std::isfinite(v.best)||!std::isfinite(v.elapsed)||!std::isfinite(sense)||std::abs(v.position.x)>25||v.position.y<.4f||v.position.y>70||v.best<0||v.best>75||v.elapsed<0||v.falls<0||sense<.5f||sense>1.5f)return false;
- bool safe=true;for(auto&r:terrain)if(ascent::collide(v.position,.5f,r).hit)safe=false;if(!safe)return false;
- p=v;p.tip=p.position+ascent::Vec{2,1.7f};sound=s;sensitivity=sense;return true;
-}
+void save(const ascent::Player&p,bool sound,float sensitivity){ascent::writeSave(ascent::defaultSavePath(),p,{sound,sensitivity});}
+bool load(ascent::Player&p,bool&sound,float&sensitivity,const std::vector<ascent::Rock>& terrain){ascent::Preferences prefs;if(!ascent::readSave(ascent::defaultSavePath(),p,prefs,terrain))return false;sound=prefs.sound;sensitivity=prefs.sensitivity;return true;}
 const char* postFragment=R"(#version 330
 in vec2 fragTexCoord;in vec4 fragColor;uniform sampler2D texture0;uniform float time;uniform float warmth;out vec4 finalColor;
 void main(){vec2 uv=fragTexCoord;vec3 c=texture(texture0,uv).rgb;float v=1.0-smoothstep(.22,.87,distance(uv,vec2(.50,.49)));c*=.72+.28*v;
@@ -63,14 +59,15 @@ float rays=pow(max(0.,1.-distance(uv,vec2(.78,.91))*.91),5.);c+=vec3(.20,.13,.04
 float grain=fract(sin(dot(uv*vec2(1440,900)+time,vec2(12.9898,78.233)))*43758.5453);c+=(grain-.5)*.009; c=c/(c+vec3(.55))*1.16;finalColor=vec4(c,1);})";
 }
 int main(int argc,char**argv){
- bool smoke=false;for(int i=1;i<argc;i++)if(std::strcmp(argv[i],"--smoke-test")==0)smoke=true;
+ bool smoke=false,autoPlay=false;for(int i=1;i<argc;i++){if(std::strcmp(argv[i],"--smoke-test")==0)smoke=true;if(std::strcmp(argv[i],"--play")==0)autoPlay=true;}
  SetConfigFlags(FLAG_WINDOW_RESIZABLE|FLAG_MSAA_4X_HINT|FLAG_VSYNC_HINT|FLAG_WINDOW_HIGHDPI);
  InitWindow(1440,900,"GETTING OVER IT / THE ASCENT");SetWindowMinSize(960,600);SetExitKey(KEY_NULL);SetTargetFPS(120);
  {
- Fonts fonts;UI ui{fonts};Audio audio;auto terrain=ascent::makeTerrain();World world(terrain);ascent::Player player;float sensitivity=1;bool hasSave=load(player,audio.enabled,sensitivity,terrain);
- enum class Screen {Intro,Playing,Pause,Settings,Help,Restart,Victory};Screen screen=Screen::Intro,previous=Screen::Intro;
+ Fonts fonts;UI ui{fonts};Audio audio;auto terrain=ascent::makeTerrain();World world(terrain);ascent::Player player;float sensitivity=1;bool hasSave=!smoke&&load(player,audio.enabled,sensitivity,terrain);
+ enum class Screen {Intro,Playing,Pause,Settings,Help,Restart,Victory};Screen screen=autoPlay?Screen::Playing:Screen::Intro,previous=Screen::Intro;
  RenderTexture2D scene=LoadRenderTexture(GetScreenWidth(),GetScreenHeight());SetTextureFilter(scene.texture,TEXTURE_FILTER_BILINEAR);Shader post=LoadShaderFromMemory(nullptr,postFragment);
  Camera3D camera{{-1,7.5f,27},{-1,6.2f,0},{0,1,0},18.5f,CAMERA_ORTHOGRAPHIC};ascent::Vec cameraCenter{-1,6.2f};
+ bool victoryAcknowledged=false;
  float clock=0,accumulator=0,saveTimer=0,toastTimer=0,fallCooldown=0;int frame=0,stage=0;std::string toast;std::vector<Particle> particles;std::mt19937 rng(141);
  auto notify=[&](std::string message){toast=message;toastTimer=4;};
  auto start=[&](){screen=Screen::Playing;notify("Find your balance. The mountain can wait.");};
@@ -82,7 +79,7 @@ int main(int argc,char**argv){
   if(IsKeyPressed(KEY_ESCAPE)){if(screen==Screen::Settings||screen==Screen::Help||screen==Screen::Restart)screen=previous;else pause();}
   if(IsKeyPressed(KEY_SPACE)&&screen==Screen::Intro)start();
   if(IsKeyPressed(KEY_R)&&screen==Screen::Playing){previous=screen;screen=Screen::Restart;}
-  if(IsKeyPressed(KEY_H)){previous=screen;screen=Screen::Help;}
+  if(IsKeyPressed(KEY_H)){if(screen==Screen::Help)screen=previous;else if(screen==Screen::Intro||screen==Screen::Playing||screen==Screen::Pause){previous=screen;screen=Screen::Help;}}
   if(IsWindowHidden()||!IsWindowFocused()){if(screen==Screen::Playing)screen=Screen::Pause;}
   bool playing=screen==Screen::Playing;
   if(playing){
@@ -97,7 +94,7 @@ int main(int argc,char**argv){
    }
    saveTimer+=dt;if(saveTimer>5&&player.grounded){save(player,audio.enabled,sensitivity);saveTimer=0;}
    int nextStage=player.best>44?2:player.best>23?1:0;if(nextStage>stage){stage=nextStage;notify(stage==1?"CHAPTER II  /  THE WEATHERED HEIGHTS":"CHAPTER III  /  ABOVE THE CLOUDS");}
-   if(player.position.y>65.75f){screen=Screen::Victory;save(player,audio.enabled,sensitivity);}
+   if(player.position.y>65.75f&&!victoryAcknowledged){victoryAcknowledged=true;screen=Screen::Victory;save(player,audio.enabled,sensitivity);}
   }else accumulator=0;
   for(auto&p:particles){p.life-=dt;p.velocity.y-=6*dt;p.position+=p.velocity*dt;}particles.erase(std::remove_if(particles.begin(),particles.end(),[](auto&p){return p.life<=0;}),particles.end());
   ascent::Vec desiredCamera=screen==Screen::Intro?ascent::Vec{-1,6.2f}:ascent::Vec{std::clamp(player.position.x+1.0f,-4.f,5.f),std::max(6.2f,player.position.y+3.4f)};
@@ -120,7 +117,7 @@ int main(int argc,char**argv){
   ui.text("GETTING OVER IT",97,39,17);ui.text("T H E   A S C E N T",98,63,9,muted);
   if(screen==Screen::Intro){ui.text("01",636,48,12,gold);ui.text("THE FOOTHILLS",664,48,11,ivory);ui.line(800,56,34,Fade(ivory,.25f));ui.text("02",854,48,12,Fade(ivory,.35f));ui.text("THE HEIGHTS",881,48,11,Fade(ivory,.35f));}
   if(ui.button(audio.enabled?"SOUND ON":"SOUND OFF",1110,37,125,37))audio.enabled=!audio.enabled;
-  if(ui.button("SETTINGS",1248,37,144,37)){previous=screen;screen=Screen::Settings;}
+  if(ui.button("SETTINGS",1248,37,144,37)&&screen!=Screen::Settings){previous=screen;screen=Screen::Settings;}
   if(screen==Screen::Intro){
    // Left-side cinematic scrim.
    for(int i=0;i<600;i++)DrawRectangle(int(i*ui.sx),int(140*ui.sy),int(ui.sx)+1,int(565*ui.sy),Fade(dark,.44f*(1-i/600.f)));
@@ -154,13 +151,13 @@ int main(int argc,char**argv){
    if(screen==Screen::Pause){ui.text("The mountain will still be here.",481,350,17,muted);if(ui.button("RESUME THE CLIMB",480,400,480,53,true))screen=Screen::Playing;if(ui.button("HOW TO PLAY",480,468,232,46)){previous=screen;screen=Screen::Help;}if(ui.button("SETTINGS",728,468,232,46)){previous=screen;screen=Screen::Settings;}if(ui.button("START AGAIN",480,530,480,46)){previous=screen;screen=Screen::Restart;}if(ui.button("SAVE & QUIT",480,625,480,45)){save(player,audio.enabled,sensitivity);break;}ui.text("ESC TO RESUME",657,592,10,muted);}
    if(screen==Screen::Settings){ui.text("AMBIENT SOUND",481,354,13,ivory);if(ui.button(audio.enabled?"ON":"OFF",840,344,120,40))audio.enabled=!audio.enabled;ui.text("MOUSE SENSITIVITY",481,422,13,ivory);std::snprintf(buf,sizeof(buf),"%.1fx",sensitivity);ui.text(buf,771,422,14,gold);if(ui.button("-",840,408,52,40))sensitivity=std::max(.5f,sensitivity-.1f);if(ui.button("+",908,408,52,40))sensitivity=std::min(1.5f,sensitivity+.1f);ui.text("DISPLAY",481,490,13,ivory);if(ui.button("TOGGLE FULLSCREEN",725,476,235,42))ToggleBorderlessWindowed();ui.text("F11 fullscreen    /    M mute    /    ESC back",481,564,12,muted);if(ui.button("BACK TO THE MOUNTAIN",480,625,480,45,true)){save(player,audio.enabled,sensitivity);screen=previous;}}
    if(screen==Screen::Help){const char*labels[]={"01   SWING","02   ANCHOR","03   PUSH & PULL"};const char*details[]={"Move the mouse to guide your hammer.","Hold left mouse (or Shift) against a rock.","Move toward the anchor to extend and push.\nMove away to pull yourself up. Release to swing."};for(int i=0;i<3;i++){ui.text(labels[i],481,349+i*77,11,gold);ui.text(details[i],481,373+i*77,14,ivory);}ui.text("No jumps. No shortcuts. Progress saves automatically.",481,595,12,muted);if(ui.button("I'M READY",480,641,480,43,true))screen=previous;}
-   if(screen==Screen::Restart){ui.text("Your current climb will return to the foothills.",481,355,16,ivory);ui.text("Your personal best stays with you.",481,387,16,muted);if(ui.button("KEEP CLIMBING",480,468,480,50,true))screen=previous;if(ui.button("START A FRESH ASCENT",480,536,480,46)){float best=player.best;player.reset();player.best=best;stage=0;screen=Screen::Playing;save(player,audio.enabled,sensitivity);}}
-   if(screen==Screen::Victory){ui.text("660 METRES. EVERY ONE EARNED.",481,355,12,gold);ui.text("The view was always waiting for you.",481,397,20,ivory,true);ui.text("Take a moment. You made it.",481,437,17,muted);if(ui.button("ONE MORE ASCENT",480,534,480,50,true)){float best=player.best;player.reset();player.best=best;screen=Screen::Playing;stage=0;save(player,audio.enabled,sensitivity);}if(ui.button("STAY A WHILE",480,602,480,45))screen=Screen::Playing;}
+   if(screen==Screen::Restart){ui.text("Your current climb will return to the foothills.",481,355,16,ivory);ui.text("Your personal best stays with you.",481,387,16,muted);if(ui.button("KEEP CLIMBING",480,468,480,50,true))screen=previous;if(ui.button("START A FRESH ASCENT",480,536,480,46)){float best=player.best;player.reset();victoryAcknowledged=false;player.best=best;stage=0;screen=Screen::Playing;save(player,audio.enabled,sensitivity);}}
+   if(screen==Screen::Victory){ui.text("660 METRES. EVERY ONE EARNED.",481,355,12,gold);ui.text("The view was always waiting for you.",481,397,20,ivory,true);ui.text("Take a moment. You made it.",481,437,17,muted);if(ui.button("ONE MORE ASCENT",480,534,480,50,true)){float best=player.best;player.reset();victoryAcknowledged=false;player.best=best;screen=Screen::Playing;stage=0;save(player,audio.enabled,sensitivity);}if(ui.button("STAY A WHILE",480,602,480,45))screen=Screen::Playing;}
   }
   EndDrawing();
   if(smoke&&frame==12){TakeScreenshot("ascent-preview.png");break;}
  }
- save(player,audio.enabled,sensitivity);UnloadRenderTexture(scene);UnloadShader(post);
+ if(!smoke)save(player,audio.enabled,sensitivity);UnloadRenderTexture(scene);UnloadShader(post);
  }
  CloseWindow();return 0;
 }
