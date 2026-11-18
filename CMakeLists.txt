@@ -22,9 +22,12 @@ if(APPLE)
   set_target_properties(angry-birds PROPERTIES MACOSX_BUNDLE TRUE
     MACOSX_BUNDLE_GUI_IDENTIFIER "com.moksh.slingshotvalley"
     MACOSX_BUNDLE_BUNDLE_NAME "Slingshot Valley"
+    MACOSX_BUNDLE_ICON_FILE "icon.icns"
     MACOSX_BUNDLE_SHORT_VERSION_STRING "0.2.0"
     MACOSX_BUNDLE_BUNDLE_VERSION "2")
   add_custom_command(TARGET angry-birds POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E make_directory "$<TARGET_FILE_DIR:angry-birds>/../Resources"
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different "${CMAKE_CURRENT_SOURCE_DIR}/assets/icon.icns" "$<TARGET_FILE_DIR:angry-birds>/../Resources/icon.icns"
     COMMAND ${CMAKE_COMMAND} -E create_symlink
       "$<TARGET_FILE:angry-birds>" "${CMAKE_BINARY_DIR}/angry-birds")
 endif()
@@ -37,7 +40,9 @@ if(BUILD_TESTING)
   add_executable(simulation-tests tests/simulation_test.cpp)
   target_link_libraries(simulation-tests PRIVATE simulation)
   add_test(NAME simulation COMMAND simulation-tests)
+  set_tests_properties(simulation PROPERTIES TIMEOUT 30)
   if(SLINGSHOT_UI_TESTS)
     add_test(NAME ui-flow COMMAND angry-birds --test-ui)
+    set_tests_properties(ui-flow PROPERTIES TIMEOUT 60)
   endif()
 endif()

@@ -14,13 +14,18 @@ struct Entity {
     bool alive{true};
     BirdType bird{BirdType::Red};
 };
-struct Feedback { b2Vec2 position; Kind kind; float intensity; int points; };
+struct Feedback {
+    b2Vec2 position;
+    Kind kind;
+    float intensity;
+    int points;
+};
 class Simulation {
-public:
+  public:
     explicit Simulation(int level = 0);
     ~Simulation();
-    Simulation(const Simulation&) = delete;
-    Simulation& operator=(const Simulation&) = delete;
+    Simulation(const Simulation &) = delete;
+    Simulation &operator=(const Simulation &) = delete;
     void reset();
     void loadLevel(int index);
     void step(float dt);
@@ -29,17 +34,18 @@ public:
     bool abilityReady() const;
     int pigsLeft() const;
     int stars() const;
-    b2Vec2 position(const Entity& entity) const;
-    float angle(const Entity& entity) const;
-    const std::vector<Entity>& entities() const { return objects; }
-    const std::vector<Feedback>& feedback() const { return effects; }
+    b2Vec2 position(const Entity &entity) const;
+    float angle(const Entity &entity) const;
+    const std::vector<Entity> &entities() const { return objects; }
+    const std::vector<Feedback> &feedback() const { return effects; }
     Phase phase() const { return state; }
     int score() const { return points; }
     int birdsLeft() const { return remaining; }
     int levelIndex() const { return level; }
-    const Level& definition() const { return levels()[level]; }
+    const Level &definition() const { return levels()[level]; }
     BirdType nextBird() const;
-private:
+
+  private:
     b2WorldId world{};
     std::vector<Entity> objects;
     std::vector<Feedback> effects;
@@ -51,4 +57,4 @@ private:
     void explode(b2Vec2 center, float radius);
     void tick();
 };
-}
+} // namespace birds

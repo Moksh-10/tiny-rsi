@@ -1,0 +1,38 @@
+name: Build and verify
+on:
+  push:
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  verify:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, ubuntu-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Linux graphics and audio dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libasound2-dev libx11-dev libxrandr-dev libxi-dev libgl1-mesa-dev libglu1-mesa-dev libxcursor-dev libxinerama-dev xvfb
+      - name: Configure
+        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DSLINGSHOT_UI_TESTS=ON
+      - name: Build
+        run: cmake --build build --parallel 4
+      - name: Verify on macOS
+        if: runner.os == 'macOS'
+        run: ctest --test-dir build --output-on-failure
+      - name: Verify on Linux
+        if: runner.os == 'Linux'
+        run: xvfb-run -a ctest --test-dir build --output-on-failure
+      - name: Package macOS app
+        if: runner.os == 'macOS'
+        run: scripts/package.sh
+      - uses: actions/upload-artifact@v4
+        if: runner.os == 'macOS'
+        with:
+          name: Slingshot-Valley-macOS
+          path: dist/Slingshot-Valley-macOS.zip
