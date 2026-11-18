@@ -2,7 +2,10 @@
 #include "progress.h"
 #include <algorithm>
 #include <cmath>
+#include <cstdarg>
+#include <cstdio>
 #include <cstdlib>
+#include <cstring>
 #include <filesystem>
 #include <iostream>
 #include <stdexcept>
@@ -13,6 +16,15 @@ namespace {
 using namespace birds;
 enum class Screen { Home, Map, Game, Pause, Result, Help };
 constexpr Color green{100, 175, 49, 255}, orange{237, 148, 43, 255};
+void logMessage(int level, const char *format, va_list arguments) {
+    std::vfprintf(stderr, format, arguments);
+    std::fputc('\n', stderr);
+    // raylib 5.5 otherwise continues into GL initialization after a failed GLFW window.
+    if (level >= LOG_WARNING && std::strstr(format, "GLFW: Failed to initialize")) {
+        std::fputs("A working OpenGL display is required to start Slingshot Valley.\n", stderr);
+        std::exit(EXIT_FAILURE);
+    }
+}
 Vector2 point(b2Vec2 p) {
     return {p.x, p.y};
 }
@@ -680,6 +692,7 @@ int main(int argc, char **argv) {
     if (startLevel >= levelCount || startLevel < -1)
         return 2;
     SetTraceLogLevel(LOG_WARNING);
+    SetTraceLogCallback(logMessage);
     SetConfigFlags(FLAG_WINDOW_RESIZABLE | FLAG_MSAA_4X_HINT | FLAG_VSYNC_HINT);
     InitWindow(screenWidth, screenHeight, "Angry Birds - Slingshot Valley");
     if (!IsWindowReady()) {

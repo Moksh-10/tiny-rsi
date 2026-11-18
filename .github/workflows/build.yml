@@ -25,6 +25,19 @@ jobs:
       - name: Verify on macOS
         if: runner.os == 'macOS'
         run: ctest --test-dir build --output-on-failure
+      - name: Verify macOS display startup handling
+        if: runner.os == 'macOS'
+        run: |
+          set +e
+          ./build/angry-birds --smoke-test > build/display-smoke.log 2>&1
+          result=$?
+          set -e
+          cat build/display-smoke.log
+          if [ "$result" -eq 1 ]; then
+            grep -q 'working OpenGL display' build/display-smoke.log
+          elif [ "$result" -ne 0 ]; then
+            exit "$result"
+          fi
       - name: Verify on Linux
         if: runner.os == 'Linux'
         run: xvfb-run -a ctest --test-dir build --output-on-failure
