@@ -16,11 +16,13 @@ namespace {
 using namespace birds;
 enum class Screen { Home, Map, Game, Pause, Result, Help };
 constexpr Color green{100, 175, 49, 255}, orange{237, 148, 43, 255};
+bool startingGraphics = true;
 void logMessage(int level, const char *format, va_list arguments) {
     std::vfprintf(stderr, format, arguments);
     std::fputc('\n', stderr);
     // raylib 5.5 otherwise continues into GL initialization after a failed GLFW window.
-    if (level >= LOG_WARNING && std::strstr(format, "GLFW: Failed to initialize")) {
+    if (level >= LOG_WARNING && startingGraphics &&
+        (std::strstr(format, "GLFW: Failed to initialize") || std::strstr(format, "GLFW: Error"))) {
         std::fputs("A working OpenGL display is required to start Slingshot Valley.\n", stderr);
         std::exit(EXIT_FAILURE);
     }
@@ -695,6 +697,7 @@ int main(int argc, char **argv) {
     SetTraceLogCallback(logMessage);
     SetConfigFlags(FLAG_WINDOW_RESIZABLE | FLAG_MSAA_4X_HINT | FLAG_VSYNC_HINT);
     InitWindow(screenWidth, screenHeight, "Angry Birds - Slingshot Valley");
+    startingGraphics = false;
     if (!IsWindowReady()) {
         std::cerr << "A working OpenGL display is required to start Slingshot Valley.\n";
         return 1;

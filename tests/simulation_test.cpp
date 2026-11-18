@@ -29,7 +29,7 @@ int main() {
                                                          {{-95, -15}},
                                                          {{-80, 10}, {-95, -10}},
                                                          {{-95, 0}},
-                                                         {{-55, 30}},
+                                                         {{-90, 25}},
                                                          {{-95, -5}, {-95, -15}},
                                                          {{-95, -15}},
                                                          {{-95, 20}}}};
@@ -63,7 +63,7 @@ int main() {
             std::cerr << "Level " << level + 1 << " did not clear\n";
             return 1;
         }
-        require(game.pigsLeft() == 0 && game.stars() >= 1 && game.stars() <= 3, "win and star rating");
+        require(game.pigsLeft() == 0 && game.stars() == 3, "three stars are attainable on every level");
         int finalScore = game.score();
         settle(game, 60);
         require(game.score() == finalScore, "win bonus awarded once");
@@ -127,5 +127,27 @@ int main() {
     for (int i = 1; i < levelCount; ++i)
         progress.complete(i, 3, 10000);
     require(progress.unlockedCount() == 12 && progress.totalStars() == 36, "complete campaign progression");
+    Simulation sixty, thirty, oneTwenty;
+    sixty.launch({-85, 5});
+    thirty.launch({-85, 5});
+    oneTwenty.launch({-85, 5});
+    for (int i = 0; i < 120; i++)
+        sixty.step(1.0f / 60);
+    for (int i = 0; i < 60; i++)
+        thirty.step(1.0f / 30);
+    for (int i = 0; i < 240; i++)
+        oneTwenty.step(1.0f / 120);
+    for (size_t i = 0; i < sixty.entities().size(); i++) {
+        const auto &a = sixty.entities()[i];
+        const auto &b = thirty.entities()[i];
+        const auto &c = oneTwenty.entities()[i];
+        require(a.alive == b.alive && a.alive == c.alive, "object survival is independent of rendering rate");
+        if (a.alive) {
+            auto pa = sixty.position(a), pb = thirty.position(b), pc = oneTwenty.position(c);
+            require(std::hypot(pa.x - pb.x, pa.y - pb.y) < .01f &&
+                        std::hypot(pa.x - pc.x, pa.y - pc.y) < .01f,
+                    "physics matches at 30, 60 and 120 FPS");
+        }
+    }
     std::cout << "Launch rules, abilities, loss state and save integrity passed\n";
 }

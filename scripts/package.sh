@@ -7,7 +7,9 @@ if [[ "${1:-}" == --skip-ui ]]; then
   shift
 fi
 build_dir="${1:-$repo_dir/build}"
-cmake -S "$repo_dir" -B "$build_dir" -DCMAKE_BUILD_TYPE=Release
+ui_tests=ON
+if [[ "$skip_ui" == true ]]; then ui_tests=OFF; fi
+cmake -S "$repo_dir" -B "$build_dir" -DCMAKE_BUILD_TYPE=Release -DSLINGSHOT_UI_TESTS="$ui_tests"
 cmake --build "$build_dir" --parallel "${BUILD_JOBS:-4}"
 ctest --test-dir "$build_dir" --output-on-failure
 mkdir -p "$repo_dir/dist"
@@ -16,9 +18,6 @@ if [[ "$(uname -s)" == Darwin ]]; then
   for asset in meadow.png canyon.png night.png characters.png materials.png Bangers-Regular.ttf Nunito-Bold.ttf; do
     test -s "$app/Contents/MacOS/assets/$asset"
   done
-  if [[ "$skip_ui" == false ]]; then
-    "$app/Contents/MacOS/angry-birds" --test-ui
-  fi
   ditto -c -k --sequesterRsrc --keepParent "$app" "$repo_dir/dist/Slingshot-Valley-macOS.zip"
   printf 'Packaged: %s\n' "$repo_dir/dist/Slingshot-Valley-macOS.zip"
 else
