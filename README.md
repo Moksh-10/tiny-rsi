@@ -52,7 +52,7 @@ ctest --test-dir build --output-on-failure
 ./build/angry-birds --render-previews build/previews
 ```
 
-The simulation suite checks all twelve levels for five seconds of pre-shot stability and verifies recorded winning sequences, star ratings, retries, finite physics, launch constraints, abilities, loss, unlocks, save round trips, and corrupt-save rejection. The UI test exercises play → pause → resume → retry → win → results → next level, map locks, help, audio, and loss → retry using internal controls, without desktop automation. Render previews export the renderer's own textures for all menus and all twelve levels.
+The simulation suite checks all twelve levels for five seconds of pre-shot stability and verifies three-star winning sequences for every level, retries, finite physics, matching simulation at 30/60/120 FPS, launch constraints, abilities, loss, unlocks, save round trips, and corrupt-save rejection. The stability check also bounds every object’s movement before launch. The UI test exercises play → pause → resume → retry → win → results → next level, map locks, help, audio, and loss → retry using internal controls, without desktop automation. Render previews export the renderer's own textures for all menus and all twelve levels.
 
 To include the graphical UI test in CTest, configure with `-DSLINGSHOT_UI_TESTS=ON`. On headless Linux, run it under `xvfb-run -a`. GitHub Actions builds and runs simulation tests on macOS and Ubuntu. Graphical UI tests run under a virtual display on Ubuntu; hosted macOS runners have no usable OpenGL display. Local macOS UI tests also run under address and undefined-behavior sanitizers.
 
@@ -76,3 +76,5 @@ On macOS, this verifies the build and creates `dist/Slingshot-Valley-macOS.zip`,
 - `tests/simulation_test.cpp`: campaign and persistence regression tests.
 
 Visual references: the official Angry Birds and Rovio game pages. The project includes generated scenery and character art; see `docs/art-direction.md` for prompts and provenance. Font licenses and library notices are bundled with the assets.
+
+Detailed verification evidence and release limits: `docs/verification.md`.

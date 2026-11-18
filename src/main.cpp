@@ -297,7 +297,11 @@ void Application::map(Vector2 mouse, bool pressed) {
                    : std::clamp(progress.unlockedCount() - 1, selectedWorld * 4, selectedWorld * 4 + 3);
     DrawRectangleRounded({310, 554, 660, 58}, .3f, 10, Fade(outline, .72f));
     art.label(progress.unlocked(info) ? levels()[info].hint : "Clear the previous level to unlock this one.",
-              640, 572, 20, paper, false, true);
+              640, 564, 20, paper, false, true);
+    if (progress.unlocked(info))
+        art.label(TextFormat("BEST %05i   /   %i OF 3 STARS", progress.records[info].score,
+                             progress.records[info].stars),
+                  640, 590, 14, paper, false, true);
     for (int i = 0; i < 3; i++) {
         Rectangle r{380 + i * 180.0f, 649, 160, 43};
         if (art.button(r, TextFormat("CHAPTER %i", i + 1), mouse, pressed,
@@ -413,6 +417,7 @@ void Application::hud(Vector2 mouse, bool pressed) {
     art.title(game.definition().name, 640, 44, 36, paper, true);
     art.label("SCORE", 1207, 21, 14, paper, false, true);
     art.title(TextFormat("%05i", static_cast<int>(shownScore)), 1218, 39, 38, paper, true);
+    art.label(TextFormat("3 STARS: %05i", game.definition().star3), 1207, 82, 13, paper, false, true);
     art.pig({1032, 51}, 15);
     art.title(TextFormat("x%i", game.pigsLeft()), 1075, 37, 28);
     for (int i = 0; i < 3; i++) {
@@ -491,6 +496,8 @@ void Application::overlay(Vector2 mouse, bool pressed) {
             art.stars({640, 230}, animatedStars, 43, 110);
             art.label("LEVEL SCORE", 640, 301, 17, {127, 105, 76, 255}, false, true);
             art.title(TextFormat("%05i", game.score()), 640, 322, 67, outline, true);
+            art.label(TextFormat("SPARE BIRD BONUS  +%i", game.birdsLeft() * 500), 640, 386, 15,
+                      {127, 105, 76, 255}, false, true);
             art.label(game.levelIndex() == levelCount - 1 ? "All 12 levels cleared. What a flock!"
                                                           : "Nice shot. The next challenge is waiting.",
                       640, 408, 20, outline, false, true);
