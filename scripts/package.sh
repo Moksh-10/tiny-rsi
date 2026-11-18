@@ -8,7 +8,7 @@ if [[ "${1:-}" == --skip-ui ]]; then
 fi
 build_dir="${1:-$repo_dir/build}"
 cmake -S "$repo_dir" -B "$build_dir" -DCMAKE_BUILD_TYPE=Release
-cmake --build "$build_dir" --parallel
+cmake --build "$build_dir" --parallel "${BUILD_JOBS:-4}"
 ctest --test-dir "$build_dir" --output-on-failure
 mkdir -p "$repo_dir/dist"
 if [[ "$(uname -s)" == Darwin ]]; then
