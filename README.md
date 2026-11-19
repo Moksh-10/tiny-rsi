@@ -33,6 +33,20 @@ Three chapters, four levels each:
 
 Wood, glass, stone, and TNT have distinct physics and damage properties. TNT and Bomb create radial damage and impulses. Physics runs at a fixed 60 Hz with four solver substeps; fast birds use continuous collision detection.
 
+## Graphics and performance
+
+The renderer follows Retina/display pixels up to **3840×2160**, with sharp distance-field text, full-detail mipmapped character/material textures, scenery grading, shadows, and interpolated physics motion. **F11** toggles borderless fullscreen. Use `--render-scale 1`, `2`, or `3` to explicitly choose 720p, 1440p, or 4K. Preview exports default to 1440p.
+
+GPU resources have move-only ownership and exception cleanup. Effects have fixed memory budgets, and music uses a small streamed buffer. A bounded background save worker keeps disk writes off the game loop. Rendering, audio APIs and physics stay on the main thread.
+
+```sh
+./build/angry-birds --render-scale 3
+./build/angry-birds --benchmark --render-scale 3 --benchmark-output build/benchmark-4k.json
+./build/angry-birds --render-scale 3 --render-previews build/previews-4k
+```
+
+See `docs/runtime-design.md` for ownership, threading rules, budgets, tests and benchmark interpretation.
+
 ## Saves
 
 Unlocks, stars, best scores, and audio preference are saved automatically. Saves live outside the app so replacing the app preserves progress:
@@ -41,7 +55,7 @@ Unlocks, stars, best scores, and audio preference are saved automatically. Saves
 - Linux: `$XDG_DATA_HOME/slingshot-valley/progress.dat`, or `~/.local/share/slingshot-valley/progress.dat`
 - Windows path handling: `%APPDATA%/Slingshot Valley/progress.dat` (Windows builds have not been verified).
 
-Saves are versioned, validated on load, and written using a temporary file followed by rename. A failed save is reported in the UI. `--demo`, UI tests, previews, and smoke tests do not read or change real player saves.
+Saves are versioned, validated on load, and written by a background worker using unique temporary files followed by rename. The last pending snapshot is drained on shutdown. A failed save is reported in the UI. `--demo`, UI tests, previews, and smoke tests do not read or change real player saves.
 
 ## Verification
 
@@ -54,7 +68,7 @@ ctest --test-dir build --output-on-failure
 
 The simulation suite checks all twelve levels for five seconds of pre-shot stability and verifies three-star winning sequences for every level, retries, finite physics, matching simulation at 30/60/120 FPS, launch constraints, abilities, loss, unlocks, save round trips, and corrupt-save rejection. The stability check also bounds every object’s movement before launch. The UI test exercises play → pause → resume → retry → win → results → next level, map locks, help, audio, and loss → retry using internal controls, without desktop automation. Render previews export the renderer's own textures for all menus and all twelve levels.
 
-To include the graphical UI test in CTest, configure with `-DSLINGSHOT_UI_TESTS=ON`. On headless Linux, run it under `xvfb-run -a`. GitHub Actions builds and runs simulation tests on macOS and Ubuntu. Graphical UI tests run under a virtual display on Ubuntu; hosted macOS runners have no usable OpenGL display. Local macOS UI tests also run under address and undefined-behavior sanitizers.
+To include the graphical UI test in CTest, configure with `-DSLINGSHOT_UI_TESTS=ON`. On headless Linux, run it under `xvfb-run -a`. GitHub Actions builds and runs simulation tests on macOS and Ubuntu. Graphical UI tests run under a virtual display on Ubuntu; hosted macOS runners have no usable OpenGL display. Local macOS UI tests also run under address and undefined-behavior sanitizers. Runtime ownership and concurrent-save tests run under ThreadSanitizer; CI includes both sanitizer modes.
 
 Development shortcuts: `--demo` starts without player saves; `--level 1` through `--level 12` open a level directly. Invalid options exit with code 2.
 
@@ -72,9 +86,22 @@ On macOS, this verifies the build and creates `dist/Slingshot-Valley-macOS.zip`,
 - `src/presentation.*`: character sprites, environments, materials, effects, fonts, and synthesized sound/music.
 - `src/simulation.*`: physics, turns, impact damage, explosions, and bird abilities.
 - `src/levels.*`: authored level compositions, bird loadouts, and star thresholds.
-- `src/progress.*`: player records and save validation.
+- `src/progress.*` and `src/save_worker.*`: player records, atomic saves and bounded background persistence.
+- `src/graphics.*` and `src/runtime.h`: resource owners, physical-resolution rendering, thread guards and fixed pools.
+- `tests/runtime_test.cpp`: memory budgets, resource ownership and concurrency checks.
 - `tests/simulation_test.cpp`: campaign and persistence regression tests.
 
 Visual references: the official Angry Birds and Rovio game pages. The project includes generated scenery and character art; see `docs/art-direction.md` for prompts and provenance. Font licenses and library notices are bundled with the assets.
 
 Detailed verification evidence and release limits: `docs/verification.md`.
+
+Sanitizer builds:
+
+```sh
+cmake -S . -B build-asan -DCMAKE_BUILD_TYPE=Debug -DSLINGSHOT_SANITIZER=address
+cmake --build build-asan --parallel 4
+ctest --test-dir build-asan --output-on-failure
+cmake -S . -B build-tsan -DCMAKE_BUILD_TYPE=Debug -DSLINGSHOT_SANITIZER=thread
+cmake --build build-tsan --target runtime-tests --parallel 4
+ctest --test-dir build-tsan -R runtime --output-on-failure
+```

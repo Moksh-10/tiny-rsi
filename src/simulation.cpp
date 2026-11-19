@@ -34,6 +34,7 @@ void Simulation::add(Kind kind, float x, float y, float width, float height, Bir
                : kind == Kind::Tnt   ? 2.0f
                                      : 4.5f;
     objects.push_back({body, kind, width, height, hp, hp, true, bird});
+    objects.back().previous = def.position;
 }
 void Simulation::loadLevel(int index) {
     if (index < 0 || index >= static_cast<int>(levels().size()))
@@ -50,6 +51,8 @@ void Simulation::reset() {
     world = b2CreateWorld(&def);
     objects.clear();
     effects.clear();
+    objects.reserve(definition().objects.size() + 3);
+    effects.reserve(1024);
     auto floorDef = b2DefaultBodyDef();
     floorDef.position = {16, -0.5f};
     auto floorBody = b2CreateBody(world, &floorDef);
@@ -68,6 +71,10 @@ void Simulation::reset() {
     // Settle small construction gaps before the player can shoot. No impact damage during warmup.
     for (int i = 0; i < 60; ++i)
         b2World_Step(world, 1.0f / 60, 4);
+    for (auto &e : objects) {
+        e.previous = b2Body_GetPosition(e.body);
+        e.previousAngle = b2Rot_GetAngle(b2Body_GetRotation(e.body));
+    }
 }
 int Simulation::pigsLeft() const {
     return static_cast<int>(std::count_if(objects.begin(), objects.end(),
@@ -85,6 +92,20 @@ b2Vec2 Simulation::position(const Entity &e) const {
 }
 float Simulation::angle(const Entity &e) const {
     return -b2Rot_GetAngle(b2Body_GetRotation(e.body));
+}
+b2Vec2 Simulation::renderPosition(const Entity &e) const {
+    const auto current = b2Body_GetPosition(e.body);
+    float alpha =
+        state == Phase::Won || state == Phase::Lost ? 1.0f : std::clamp(accumulator * 60.0f, 0.0f, 1.0f);
+    return {(e.previous.x + (current.x - e.previous.x) * alpha) * scale,
+            ground - (e.previous.y + (current.y - e.previous.y) * alpha) * scale};
+}
+float Simulation::renderAngle(const Entity &e) const {
+    float current = b2Rot_GetAngle(b2Body_GetRotation(e.body));
+    float delta = std::atan2(std::sin(current - e.previousAngle), std::cos(current - e.previousAngle));
+    float alpha =
+        state == Phase::Won || state == Phase::Lost ? 1.0f : std::clamp(accumulator * 60.0f, 0.0f, 1.0f);
+    return -(e.previousAngle + delta * alpha);
 }
 bool Simulation::launch(b2Vec2 pull) {
     if (state != Phase::Aiming || remaining <= 0 || !std::isfinite(pull.x) || !std::isfinite(pull.y))
@@ -156,6 +177,11 @@ void Simulation::step(float dt) {
 void Simulation::tick() {
     constexpr float dt = 1.0f / 60;
     age += dt;
+    for (auto &e : objects)
+        if (e.alive) {
+            e.previous = b2Body_GetPosition(e.body);
+            e.previousAngle = b2Rot_GetAngle(b2Body_GetRotation(e.body));
+        }
     b2World_Step(world, dt, 4);
     const auto events = b2World_GetContactEvents(world);
     // Consume transient contact handles before destroying bodies.

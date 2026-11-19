@@ -1,15 +1,23 @@
 #include "presentation.h"
 #include "progress.h"
+#include "save_worker.h"
 #include <algorithm>
+#include <chrono>
 #include <cmath>
 #include <cstdarg>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
 #include <filesystem>
+#include <fstream>
 #include <iostream>
+#include <memory>
+#include <numeric>
+#include <rlgl.h>
+#include <sstream>
 #include <stdexcept>
 #include <string>
+#include <sys/resource.h>
 #include <vector>
 
 namespace {
@@ -33,9 +41,12 @@ Vector2 point(b2Vec2 p) {
 class Application {
   public:
     Application(const std::filesystem::path &assets, const std::filesystem::path &save, bool demo)
-        : art(assets), savePath(save), demoMode(demo) {
-        if (!demoMode)
+        : art(assets), savePath(save), assetDirectory(assets), demoMode(demo) {
+        trail.reserve(900);
+        if (!demoMode) {
             progress.load(savePath);
+            saves = std::make_unique<SaveWorker>(savePath);
+        }
         selectedWorld = std::min(2, (progress.unlockedCount() - 1) / 4);
     }
     void frame(float dt, Vector2 mouse);
@@ -43,6 +54,9 @@ class Application {
     void renderPreview(const std::string &name);
     void testFlow();
     bool quitting{};
+    std::size_t textureMemoryBytes() const { return art.textureMemoryBytes(); }
+    std::size_t pcmMemoryBytes() const { return audio.pcmMemoryBytes(); }
+    void benchmarkFrame(int frame);
 
   private:
     Art art;
@@ -51,6 +65,8 @@ class Application {
     Progress progress;
     Effects effects;
     std::filesystem::path savePath;
+    std::filesystem::path assetDirectory;
+    std::unique_ptr<SaveWorker> saves;
     bool demoMode{}, dragging{}, savedResult{}, saveFailed{}, wasFocused{true}, abilityRequested{};
     Screen screen{Screen::Home}, helpReturn{Screen::Home};
     int selectedWorld{}, hoveredLevel{-1};
@@ -65,13 +81,13 @@ class Application {
     }
     void save() {
         if (!demoMode)
-            saveFailed = !progress.save(savePath);
+            saves->submit(progress);
     }
     void click() { audio.play(Cue::Click, progress.muted); }
     void home(Vector2 mouse, bool pressed);
     void map(Vector2 mouse, bool pressed);
     void playfield();
-    void hud(Vector2 mouse, bool pressed);
+    void hud(Vector2 mouse, bool pressed, bool interactive = true);
     void overlay(Vector2 mouse, bool pressed);
     void help(Vector2 mouse, bool pressed);
     void shootInput(Vector2 mouse);
@@ -147,6 +163,42 @@ void Application::testFlow() {
             throw std::runtime_error(message);
     };
     const Vector2 outside{-1000, -1000};
+    // Constructor failure after uploading both atlases must release every acquired handle.
+    const auto failureDirectory =
+        std::filesystem::temp_directory_path() /
+        ("slingshot-assets-" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
+    std::filesystem::create_directories(failureDirectory);
+    struct Cleanup {
+        std::filesystem::path path;
+        ~Cleanup() {
+            std::error_code ec;
+            std::filesystem::remove_all(path, ec);
+        }
+    } cleanup{failureDirectory};
+    for (const auto *name : {"characters.png", "materials.png"})
+        std::filesystem::create_symlink(std::filesystem::absolute(assetDirectory / name),
+                                        failureDirectory / name);
+    const auto texturesBefore = TextureResource::liveCount(), imagesBefore = ImageResource::liveCount();
+    bool failed = false;
+    try {
+        Art incomplete(failureDirectory);
+    } catch (const std::runtime_error &) {
+        failed = true;
+    }
+    expect(failed && TextureResource::liveCount() == texturesBefore &&
+               ImageResource::liveCount() == imagesBefore,
+           "asset constructor failure releases all handles");
+    bool threadRejected = false;
+    {
+        std::jthread foreign([&] {
+            try {
+                art.background(0, 0);
+            } catch (const std::logic_error &) {
+                threadRejected = true;
+            }
+        });
+    }
+    expect(threadRejected, "rendering on a foreign thread rejected before GPU access");
     home({250, 530}, true);
     expect(screen == Screen::Game && game.levelIndex() == 0, "home play opens first level");
     hud({46, 45}, true);
@@ -198,6 +250,30 @@ void Application::testFlow() {
     expect(screen == Screen::Game && game.birdsLeft() == 3, "try again restores flock");
     std::cout << "UI flow checks passed: play, pause, resume, retry, win, unlock, next level, map, help, "
                  "sound, loss\n";
+}
+void Application::benchmarkFrame(int frame) {
+    if (frame % 240 == 0)
+        start(11);
+    constexpr float dt = 1.0f / 60;
+    clock += dt;
+    playTime += dt;
+    effects.update(dt);
+    audio.update(game.definition().theme, false);
+    game.step(dt);
+    effects.consume(game.feedback());
+    if (game.phase() == Phase::Aiming)
+        game.launch({-95, 20});
+    if (frame % 18 == 0) {
+        const std::array<Feedback, 4> bursts{{{{760, 400}, Kind::Tnt, 8, 0},
+                                              {{880, 450}, Kind::Glass, 7, 0},
+                                              {{1040, 500}, Kind::Tnt, 7, 0},
+                                              {{1120, 400}, Kind::Wood, 6, 0}}};
+        effects.consume(bursts);
+    }
+    shownScore = static_cast<float>(game.score());
+    playfield();
+    // Render the same HUD without desktop input driving the benchmark.
+    hud({-1000, -1000}, false, false);
 }
 void Application::home(Vector2 mouse, bool pressed) {
     art.background(0, clock, true);
@@ -346,11 +422,9 @@ void Application::shootInput(Vector2 mouse) {
 }
 void Application::playfield() {
     art.background(game.definition().theme, clock);
-    Camera2D camera{};
-    camera.zoom = 1;
+    rlPushMatrix();
     if (effects.shake > .1f)
-        camera.offset = {std::sin(clock * 111) * effects.shake, std::cos(clock * 139) * effects.shake * .6f};
-    BeginMode2D(camera);
+        rlTranslatef(std::sin(clock * 111) * effects.shake, std::cos(clock * 139) * effects.shake * .6f, 0);
     for (size_t i = 0; i < trail.size(); i += 4)
         DrawCircleV(trail[i], 2, Fade(paper, .45f));
     // Sculpted, outlined slingshot with separate front and back elastic.
@@ -377,14 +451,17 @@ void Application::playfield() {
         }
         art.bird(held, 20, game.nextBird());
     }
+    for (const auto &e : game.entities())
+        if (e.alive)
+            art.shadow(game, e);
     for (const auto &e : game.entities()) {
         if (!e.alive)
             continue;
         if (e.kind == Kind::Bird)
-            art.bird(point(game.position(e)), e.width / 2, e.bird, game.angle(e) * RAD2DEG,
+            art.bird(point(game.renderPosition(e)), e.width / 2, e.bird, game.renderAngle(e) * RAD2DEG,
                      game.phase() == Phase::Flying);
         else if (e.kind == Kind::Pig)
-            art.pig(point(game.position(e)), e.width / 2, game.angle(e) * RAD2DEG,
+            art.pig(point(game.renderPosition(e)), e.width / 2, game.renderAngle(e) * RAD2DEG,
                     e.health < e.maxHealth * .6f);
         else
             art.block(game, e);
@@ -401,9 +478,9 @@ void Application::playfield() {
         art.bird({76.0f + i * 47, 601}, 15, game.definition().flock[std::min(2, slot)]);
     }
     effects.draw(art);
-    EndMode2D();
+    rlPopMatrix();
 }
-void Application::hud(Vector2 mouse, bool pressed) {
+void Application::hud(Vector2 mouse, bool pressed, bool interactive) {
     DrawRectangleGradientV(0, 0, 1280, 125, Fade(Color{26, 35, 39, 255}, .45f), Fade(outline, 0));
     if (icon({46, 45}, 0, mouse, pressed)) {
         go(Screen::Pause);
@@ -447,9 +524,9 @@ void Application::hud(Vector2 mouse, bool pressed) {
         art.title(TextFormat("%02i  /  %s", game.levelIndex() + 1, game.definition().name), 640, 151, 48,
                   Fade(paper, alpha), true);
     }
-    if (IsKeyPressed(KEY_R))
+    if (interactive && IsKeyPressed(KEY_R))
         start(game.levelIndex());
-    if (IsKeyPressed(KEY_P))
+    if (interactive && IsKeyPressed(KEY_P))
         go(Screen::Pause);
 }
 void Application::overlay(Vector2 mouse, bool pressed) {
@@ -663,6 +740,10 @@ void Application::frame(float dt, Vector2 mouse) {
         help(mouse, pressed);
         break;
     }
+    if (saves) {
+        const auto status = saves->status();
+        saveFailed = status.failed && status.completed == status.requested;
+    }
     if (saveFailed) {
         DrawRectangleRounded({340, 10, 600, 35}, .3f, 8, outline);
         art.label("Progress could not be saved. Check your user-data folder is writable.", 640, 17, 17, paper,
@@ -671,14 +752,31 @@ void Application::frame(float dt, Vector2 mouse) {
 }
 } // namespace
 int main(int argc, char **argv) {
-    bool smoke = false, demo = false, testUI = false;
+    bool smoke = false, demo = false, testUI = false, benchmark = false;
+    float requestedScale = 0;
+    std::filesystem::path benchmarkOutput;
     int startLevel = -1;
     std::filesystem::path previewDirectory;
     for (int i = 1; i < argc; i++) {
         std::string arg = argv[i];
         if (arg == "--smoke-test")
             smoke = demo = true;
-        else if (arg == "--test-ui")
+        else if (arg == "--benchmark")
+            benchmark = demo = true;
+        else if (arg == "--benchmark-output" && i + 1 < argc)
+            benchmarkOutput = argv[++i];
+        else if (arg == "--render-scale" && i + 1 < argc) {
+            try {
+                std::string text = argv[++i];
+                size_t used{};
+                requestedScale = std::stof(text, &used);
+                if (used != text.size() || !std::isfinite(requestedScale) || requestedScale < .5f ||
+                    requestedScale > 3)
+                    return 2;
+            } catch (...) {
+                return 2;
+            }
+        } else if (arg == "--test-ui")
             testUI = demo = true;
         else if (arg == "--demo")
             demo = true;
@@ -702,28 +800,33 @@ int main(int argc, char **argv) {
         return 2;
     SetTraceLogLevel(LOG_WARNING);
     SetTraceLogCallback(logMessage);
-    SetConfigFlags(FLAG_WINDOW_RESIZABLE | FLAG_MSAA_4X_HINT | FLAG_VSYNC_HINT);
-    InitWindow(screenWidth, screenHeight, "Angry Birds - Slingshot Valley");
+    SetConfigFlags(FLAG_WINDOW_RESIZABLE | FLAG_MSAA_4X_HINT | FLAG_VSYNC_HINT | FLAG_WINDOW_HIGHDPI);
+    InitWindow(1440, 810, "Angry Birds - Slingshot Valley");
     startingGraphics = false;
     if (!IsWindowReady()) {
         std::cerr << "A working OpenGL display is required to start Slingshot Valley.\n";
         return 1;
     }
+    struct WindowLifetime {
+        ~WindowLifetime() { CloseWindow(); }
+    } windowLifetime;
     SetWindowMinSize(960, 540);
     SetExitKey(KEY_NULL);
-    SetTargetFPS(60);
-    auto target = LoadRenderTexture(screenWidth, screenHeight);
-    SetTextureFilter(target.texture, TEXTURE_FILTER_BILINEAR);
+    SetTargetFPS(std::clamp(GetMonitorRefreshRate(GetCurrentMonitor()), 60, 240));
+    RenderSurface surface;
+    surface.resize(renderSize(GetRenderWidth(), GetRenderHeight(),
+                              requestedScale > 0          ? requestedScale
+                              : !previewDirectory.empty() ? 2.0f
+                                                          : 0));
     std::filesystem::path appDirectory = GetApplicationDirectory();
     auto assets = appDirectory / "assets";
     if (!std::filesystem::exists(assets))
         assets = ASSET_SOURCE_DIR;
-    for (const auto *required : {"meadow.png", "canyon.png", "night.png", "characters.png", "materials.png",
-                                 "Bangers-Regular.ttf", "Nunito-Bold.ttf"}) {
+    for (const auto *required :
+         {"meadow.png", "canyon.png", "night.png", "characters.png", "materials.png", "Bangers-Regular.ttf",
+          "Nunito-Bold.ttf", "shaders/sdf.fs", "shaders/scenery.fs"}) {
         if (!std::filesystem::is_regular_file(assets / required)) {
             std::cerr << "Missing game asset: " << (assets / required) << '\n';
-            UnloadRenderTexture(target);
-            CloseWindow();
             return 1;
         }
     }
@@ -744,28 +847,88 @@ int main(int argc, char **argv) {
             savePath = std::filesystem::path(userHome) / ".local/share/slingshot-valley/progress.dat";
 #endif
         Application app(assets, savePath, demo);
-        if (testUI) {
-            BeginTextureMode(target);
+        if (benchmark) {
+            ClearWindowState(FLAG_VSYNC_HINT);
+            SetTargetFPS(0);
+            std::vector<double> timings;
+            timings.reserve(300);
+            for (int frame = 0; frame < 360; frame++) {
+                auto before = std::chrono::steady_clock::now();
+                surface.begin();
+                app.benchmarkFrame(frame);
+                surface.end();
+                BeginDrawing();
+                ClearBackground(outline);
+                surface.present();
+                EndDrawing();
+                auto after = std::chrono::steady_clock::now();
+                if (frame >= 60)
+                    timings.push_back(std::chrono::duration<double, std::milli>(after - before).count());
+            }
+            std::sort(timings.begin(), timings.end());
+            rusage usage{};
+            getrusage(RUSAGE_SELF, &usage);
+#ifdef __APPLE__
+            const auto peakRss = usage.ru_maxrss;
+#else
+            const auto peakRss = usage.ru_maxrss * 1024;
+#endif
+            std::ostringstream report;
+            report << "{\n  \"frames\": 300,\n  \"render_width\": " << surface.size().width
+                   << ",\n  \"render_height\": " << surface.size().height << ",\n  \"mean_frame_ms\": "
+                   << std::accumulate(timings.begin(), timings.end(), 0.0) / timings.size()
+                   << ",\n  \"p95_frame_ms\": " << timings[284] << ",\n  \"p99_frame_ms\": " << timings[296]
+                   << ",\n  \"peak_rss_bytes\": " << peakRss
+                   << ",\n  \"color_target_bytes\": " << surface.size().colorBytes()
+                   << ",\n  \"estimated_texture_bytes\": " << app.textureMemoryBytes()
+                   << ",\n  \"sound_pcm_bytes\": " << app.pcmMemoryBytes() << "\n}\n";
+            std::cout << report.str();
+            if (!benchmarkOutput.empty()) {
+                if (benchmarkOutput.has_parent_path())
+                    std::filesystem::create_directories(benchmarkOutput.parent_path());
+                std::ofstream out(benchmarkOutput);
+                out << report.str();
+                if (!out)
+                    throw std::runtime_error("Cannot write benchmark report");
+            }
+        } else if (testUI) {
+            const auto original = surface.size();
+            for (auto size :
+                 {RenderSize{1280, 720}, RenderSize{2560, 1440}, RenderSize{3840, 2160}, original}) {
+                surface.resize(size);
+                if (surface.get().depth.id || TargetResource::liveCount() != 1)
+                    throw std::runtime_error("Render target ownership/depth budget failed");
+            }
+            bool rejected = false;
+            try {
+                surface.resize({7680, 4320});
+            } catch (const std::invalid_argument &) {
+                rejected = true;
+            }
+            if (!rejected)
+                throw std::runtime_error("Oversized render target accepted");
+            surface.begin();
             try {
                 app.testFlow();
             } catch (const std::exception &error) {
                 std::cerr << "UI test failed: " << error.what() << '\n';
-                EndTextureMode();
+                surface.end();
                 throw;
             }
-            EndTextureMode();
+            surface.end();
         } else if (!previewDirectory.empty()) {
             std::filesystem::create_directories(previewDirectory);
             for (const auto *name :
                  {"home", "map", "canyon", "night", "game", "pause", "result", "help", "icon"}) {
-                BeginTextureMode(target);
+                surface.begin();
                 app.renderPreview(name);
-                EndTextureMode();
+                surface.end();
                 // Read the renderer's own offscreen texture, never the desktop or other apps.
-                auto image = LoadImageFromTexture(target.texture);
+                auto image = LoadImageFromTexture(surface.get().texture);
                 ImageFlipVertical(&image);
                 if (std::string(name) == "icon") {
-                    auto square = ImageFromImage(image, {280, 0, 720, 720});
+                    auto square = ImageFromImage(image, {float((image.width - image.height) / 2), 0,
+                                                         float(image.height), float(image.height)});
                     UnloadImage(image);
                     image = square;
                 }
@@ -774,10 +937,10 @@ int main(int argc, char **argv) {
             }
             for (int level = 1; level <= levelCount; level++) {
                 const std::string name = TextFormat("level-%02i", level);
-                BeginTextureMode(target);
+                surface.begin();
                 app.renderPreview(name);
-                EndTextureMode();
-                auto image = LoadImageFromTexture(target.texture);
+                surface.end();
+                auto image = LoadImageFromTexture(surface.get().texture);
                 ImageFlipVertical(&image);
                 ExportImage(image, (previewDirectory / (name + ".png")).string().c_str());
                 UnloadImage(image);
@@ -787,19 +950,21 @@ int main(int argc, char **argv) {
                 app.start(startLevel);
             int frames = 0;
             while (!WindowShouldClose() && !app.quitting) {
+                if (IsKeyPressed(KEY_F11))
+                    ToggleBorderlessWindowed();
+                surface.resize(renderSize(GetRenderWidth(), GetRenderHeight(), requestedScale));
                 float zoom =
                     std::min(GetScreenWidth() / float(screenWidth), GetScreenHeight() / float(screenHeight));
                 Vector2 offset{(GetScreenWidth() - screenWidth * zoom) / 2,
                                (GetScreenHeight() - screenHeight * zoom) / 2};
                 auto mouse = GetMousePosition();
                 mouse = {(mouse.x - offset.x) / zoom, (mouse.y - offset.y) / zoom};
-                BeginTextureMode(target);
+                surface.begin();
                 app.frame(std::min(GetFrameTime(), .1f), mouse);
-                EndTextureMode();
+                surface.end();
                 BeginDrawing();
                 ClearBackground(outline);
-                DrawTexturePro(target.texture, {0, 0, float(screenWidth), -float(screenHeight)},
-                               {offset.x, offset.y, screenWidth * zoom, screenHeight * zoom}, {}, 0, WHITE);
+                surface.present();
                 EndDrawing();
                 if (smoke && ++frames >= 120)
                     break;
@@ -809,7 +974,6 @@ int main(int argc, char **argv) {
         std::cerr << "Game error: " << error.what() << '\n';
         exitCode = 1;
     }
-    UnloadRenderTexture(target);
-    CloseWindow();
+
     return exitCode;
 }

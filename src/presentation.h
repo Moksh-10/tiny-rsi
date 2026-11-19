@@ -1,8 +1,11 @@
 #pragma once
+#include "graphics.h"
 #include "simulation.h"
 #include <array>
+#include <cstdint>
 #include <filesystem>
 #include <raylib.h>
+#include <span>
 #include <vector>
 namespace birds {
 constexpr int screenWidth = 1280, screenHeight = 720;
@@ -10,7 +13,9 @@ constexpr Color outline{49, 34, 37, 255}, paper{255, 247, 221, 255}, gold{255, 2
 class Art {
   public:
     explicit Art(const std::filesystem::path &assets);
-    ~Art();
+    ~Art() = default;
+    std::size_t textureMemoryBytes() const;
+    void shadow(const Simulation &game, const Entity &entity) const;
     Art(const Art &) = delete;
     Art &operator=(const Art &) = delete;
     void background(int theme, float time, bool menu = false) const;
@@ -29,10 +34,13 @@ class Art {
     void star(Vector2 center, float radius, bool filled) const;
 
   private:
-    std::array<Texture2D, 3> scenery{};
-    std::array<Texture2D, 8> characters{};
-    std::array<Texture2D, 4> materials{};
-    Font heading{}, body{};
+    MainThreadOwner owner;
+    std::array<TextureResource, 3> scenery{};
+    std::array<TextureResource, 8> characters{};
+    std::array<TextureResource, 4> materials{};
+    FontResource heading, body;
+    ShaderResource sdfShader, sceneryShader;
+    int themeUniform{-1};
 };
 struct Particle {
     Vector2 p, velocity;
@@ -45,31 +53,43 @@ struct Popup {
     int score;
     float life;
 };
+struct Shockwave {
+    Vector2 position;
+    float life;
+};
 class Effects {
   public:
     void update(float dt);
-    void consume(const std::vector<Feedback> &feedback);
+    void consume(std::span<const Feedback> feedback);
     void confetti();
     void draw(const Art &art) const;
     void clear();
     float shake{};
 
   private:
-    std::vector<Particle> particles;
-    std::vector<Popup> popups;
+    MainThreadOwner owner;
+    FixedPool<Particle, 1024> particles;
+    FixedPool<Popup, 128> popups;
+    FixedPool<Shockwave, 32> waves;
 };
 enum class Cue { Click, Launch, Hit, Pop, Boom, Win, Lose, Ability };
 class Audio {
   public:
     Audio();
-    ~Audio();
+    ~Audio() = default;
+    std::size_t pcmMemoryBytes() const;
     void play(Cue cue, bool muted);
     void update(int theme, bool muted);
 
   private:
-    bool ready{};
-    std::array<Sound, 8> sounds{};
-    std::array<Sound, 3> music{};
+    MainThreadOwner owner;
+    AudioDevice device;
+    std::array<SoundResource, 8> sounds{};
+    StreamResource music;
+    static constexpr int musicRate = 22050, musicFrames = 2048;
+    std::array<short, musicFrames> musicSamples{};
+    std::array<std::array<float, 16>, 3> notes{};
+    std::uint64_t musicCursor{};
     int playingTheme{-1};
 };
 } // namespace birds

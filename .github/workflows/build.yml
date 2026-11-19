@@ -4,6 +4,9 @@ on:
   pull_request:
 permissions:
   contents: read
+concurrency:
+  group: slingshot-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 jobs:
   verify:
     strategy:
@@ -49,3 +52,21 @@ jobs:
         with:
           name: Slingshot-Valley-macOS
           path: dist/Slingshot-Valley-macOS.zip
+  sanitizers:
+    runs-on: macos-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        sanitizer: [address, thread]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure sanitizer
+        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug -DSLINGSHOT_SANITIZER=${{ matrix.sanitizer }}
+      - name: Build runtime checks
+        run: cmake --build build --target runtime-tests simulation-tests --parallel 4
+      - name: Check memory and undefined behavior
+        if: matrix.sanitizer == 'address'
+        run: ctest --test-dir build -R 'simulation|runtime' --output-on-failure
+      - name: Check concurrent saves for races
+        if: matrix.sanitizer == 'thread'
+        run: ctest --test-dir build -R runtime --output-on-failure

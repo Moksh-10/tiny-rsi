@@ -1,7 +1,14 @@
 #include "progress.h"
 #include <algorithm>
+#include <atomic>
+#include <cstdint>
 #include <fstream>
 #include <string>
+#ifdef _WIN32
+#include <process.h>
+#else
+#include <unistd.h>
+#endif
 namespace birds {
 bool Progress::unlocked(int level) const {
     return level >= 0 && level < levelCount && (level == 0 || records[level - 1].stars > 0);
@@ -50,7 +57,21 @@ bool Progress::save(const std::filesystem::path &path) const {
     if (error)
         return false;
     auto temp = path;
-    temp += ".tmp";
+    static std::atomic<std::uint64_t> sequence{};
+#ifdef _WIN32
+    const auto process = _getpid();
+#else
+    const auto process = getpid();
+#endif
+    temp += ".tmp." + std::to_string(process) + "." +
+            std::to_string(sequence.fetch_add(1, std::memory_order_relaxed));
+    struct Cleanup {
+        std::filesystem::path path;
+        ~Cleanup() {
+            std::error_code ignored;
+            std::filesystem::remove(path, ignored);
+        }
+    } cleanup{temp};
     {
         std::ofstream out(temp);
         if (!out)

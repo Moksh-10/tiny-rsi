@@ -13,6 +13,8 @@ struct Entity {
     float width{}, height{}, health{}, maxHealth{};
     bool alive{true};
     BirdType bird{BirdType::Red};
+    b2Vec2 previous{};
+    float previousAngle{};
 };
 struct Feedback {
     b2Vec2 position;
@@ -36,6 +38,8 @@ class Simulation {
     int stars() const;
     b2Vec2 position(const Entity &entity) const;
     float angle(const Entity &entity) const;
+    b2Vec2 renderPosition(const Entity &entity) const;
+    float renderAngle(const Entity &entity) const;
     const std::vector<Entity> &entities() const { return objects; }
     const std::vector<Feedback> &feedback() const { return effects; }
     Phase phase() const { return state; }

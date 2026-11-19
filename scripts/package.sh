@@ -15,7 +15,7 @@ ctest --test-dir "$build_dir" --output-on-failure
 mkdir -p "$repo_dir/dist"
 if [[ "$(uname -s)" == Darwin ]]; then
   app="$build_dir/angry-birds.app"
-  for asset in meadow.png canyon.png night.png characters.png materials.png Bangers-Regular.ttf Nunito-Bold.ttf; do
+  for asset in meadow.png canyon.png night.png characters.png materials.png Bangers-Regular.ttf Nunito-Bold.ttf shaders/sdf.fs shaders/scenery.fs; do
     test -s "$app/Contents/MacOS/assets/$asset"
   done
   ditto -c -k --sequesterRsrc --keepParent "$app" "$repo_dir/dist/Slingshot-Valley-macOS.zip"
