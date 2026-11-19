@@ -1,13 +1,39 @@
 #include "physics.hpp"
 #include <limits>
 namespace ascent {
-Contact collide(Vec p,float radius,const Rock& r){
- float closest=std::numeric_limits<float>::max(); Vec near{},out{}; bool inside=true;
- for(size_t i=0;i<r.points.size();++i){Vec a=r.points[i],b=r.points[(i+1)%r.points.size()],e=b-a; Vec n=unit({e.y,-e.x}); if(dot(p-a,n)>0)inside=false;
-  float t=std::clamp(dot(p-a,e)/std::max(dot(e,e),.0001f),0.f,1.f);Vec q=a+e*t;float d=length(p-q);if(d<closest){closest=d;near=q;out=n;}
+Contact collide(Vec p, float radius, const Rock& rock) {
+ if (rock.points.size() < 3 || radius <= 0) return {};
+ float closestSquared = std::numeric_limits<float>::max();
+ Vec nearest{}, outward{};
+ bool inside = false;
+ // Even/odd containment works for both convex ledges and the concave base.
+ for (size_t i = 0; i < rock.points.size(); ++i) {
+  Vec a = rock.points[i], b = rock.points[(i + 1) % rock.points.size()];
+  Vec edge = b - a;
+  float edgeSquared = dot(edge, edge);
+  if (edgeSquared < 1e-10f) continue;
+  if ((a.y > p.y) != (b.y > p.y)) {
+   float crossing = a.x + (p.y - a.y) * edge.x / edge.y;
+   if (p.x < crossing) inside = !inside;
+  }
+  float t = std::clamp(dot(p - a, edge) / edgeSquared, 0.f, 1.f);
+  Vec q = a + edge * t;
+  float squared = dot(p - q, p - q);
+  if (squared < closestSquared) {
+   closestSquared = squared;
+   nearest = q;
+   outward = unit({edge.y, -edge.x});
+  }
  }
- if(inside)return {true,out,near,radius+closest};
- if(closest<radius)return {true,unit(p-near),near,radius-closest};
+ float distance = std::sqrt(closestSquared);
+ if (inside) {
+  Vec escape = distance > 1e-6f ? (nearest - p) / distance : outward;
+  return {true, escape, nearest, radius + distance};
+ }
+ if (distance < radius) {
+  Vec normal = distance > 1e-6f ? (p - nearest) / distance : outward;
+  return {true, normal, nearest, radius - distance};
+ }
  return {};
 }
 static Rock shape(float x,float y,float w,float h,int palette=0){return {{{x-w*.5f,y-h},{x+w*.48f,y-h*.82f},{x+w*.53f,y-h*.2f},{x+w*.30f,y},{x-w*.30f,y+.08f},{x-w*.56f,y-h*.32f}},2.6f,palette};}
@@ -27,7 +53,8 @@ std::vector<Rock> makeTerrain(){
 }
 void Player::reset(){*this=Player{};}
 void Player::step(float dt,Vec desired,bool hold,const std::vector<Rock>& terrain){
- if(position.y< -4||std::abs(position.x)>27){int f=falls+1;float b=best,t=elapsed;reset();falls=f;best=b;elapsed=t;return;}
+ if(!std::isfinite(dt)||dt<=0||!std::isfinite(desired.x)||!std::isfinite(desired.y))return;
+ if(position.y< -4||std::abs(position.x)>27){int f=falls+1;float b=best,r=runBest,t=elapsed;reset();falls=f;best=b;runBest=r;elapsed=t;return;}
  elapsed+=dt;impact=std::max(0.f,impact-dt*4);aim=limited(desired,3.15f);if(length(aim)<.85f)aim=unit(aim)*.85f;
  Vec old=position;velocity.y-=13.0f*dt;velocity=limited(velocity,19);position+=velocity*dt;
  Vec shoulder=position+Vec{0,.55f};Vec target=shoulder+aim;
@@ -46,7 +73,8 @@ void Player::step(float dt,Vec desired,bool hold,const std::vector<Rock>& terrai
  velocity=limited(velocity*.35f+displacement*.65f,18.f);velocity.x*=std::exp(-dt*(grounded?7.f:.35f));
  if(gripping)velocity=velocity*.86f;
  if(gripping&&length(tip-(position+Vec{0,.55f}))>3.65f)gripping=false;
- best=std::max(best,position.y-.55f);
- if(position.y< -4||std::abs(position.x)>27){int f=falls+1;float b=best,t=elapsed;reset();falls=f;best=b;elapsed=t;}
+ runBest=std::max(runBest,position.y-.55f);
+ best=std::max(best,runBest);
+ if(position.y< -4||std::abs(position.x)>27){int f=falls+1;float b=best,r=runBest,t=elapsed;reset();falls=f;best=b;runBest=r;elapsed=t;}
 }
 }

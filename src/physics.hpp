@@ -13,8 +13,8 @@ struct Contact { bool hit=false; Vec normal{},point{}; float penetration=0; };
 Contact collide(Vec p,float radius,const Rock& rock);
 std::vector<Rock> makeTerrain();
 struct Player {
- Vec position{-5,0.65f},velocity{},tip{-3,1.8f},aim{2,1.2f},anchor{};
- bool gripping=false,grounded=false; float best=0,elapsed=0; int falls=0; float impact=0;
+ Vec position{-5,0.55f},velocity{},tip{-3,1.8f},aim{2,1.2f},anchor{};
+ bool gripping=false,grounded=false; float best=0,runBest=0,elapsed=0; int falls=0; float impact=0;
  void reset();
  void step(float dt,Vec desired,bool hold,const std::vector<Rock>& terrain);
 };

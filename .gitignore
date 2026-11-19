@@ -7,3 +7,5 @@
 /ascent-preview.png
 *.save
 *.save.tmp
+
+/ascent-*.png
