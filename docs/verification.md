@@ -28,3 +28,9 @@ The GitHub workflow checks macOS builds/simulation/package generation and Ubuntu
 ## Release scope
 
 This is a complete offline desktop campaign build. It is not signed or notarized for public macOS distribution. The locally packaged binary is arm64. Windows, browser export, and native mobile builds are outside the verified release scope.
+
+## v0.3 update — 19 November 2026
+
+The graphics/runtime revision adds physical-pixel rendering up to 4K, distance-field text, source-detail mipmapped materials, interpolated physics, color-only framebuffers, move-only native resources, bounded effects, streamed music, and a coalescing save worker. The complete local address/undefined-behavior and race-check suites pass. Cross-platform CI includes normal builds plus address and thread sanitizer jobs.
+
+See `docs/runtime-design.md` for lifecycle/threading rules and `docs/performance.md` for the measured performance and explicit memory tradeoffs. No computer-use automation was used for this verification; visual checks used exported render targets.

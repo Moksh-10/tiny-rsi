@@ -105,3 +105,5 @@ cmake -S . -B build-tsan -DCMAKE_BUILD_TYPE=Debug -DSLINGSHOT_SANITIZER=thread
 cmake --build build-tsan --target runtime-tests --parallel 4
 ctest --test-dir build-tsan -R runtime --output-on-failure
 ```
+
+Measured v0.3 frame times, memory tradeoffs and raw benchmark output: `docs/performance.md`.

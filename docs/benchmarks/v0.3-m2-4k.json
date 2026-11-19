@@ -1,0 +1,12 @@
+{
+  "frames": 300,
+  "render_width": 3840,
+  "render_height": 2160,
+  "mean_frame_ms": 5.51331,
+  "p95_frame_ms": 9.13363,
+  "p99_frame_ms": 10.4593,
+  "peak_rss_bytes": 189300736,
+  "color_target_bytes": 33177600,
+  "estimated_texture_bytes": 33112440,
+  "sound_pcm_bytes": 784120
+}
