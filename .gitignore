@@ -4,3 +4,6 @@
 progress.dat
 progress.dat.tmp
 /dist/
+/.workers/
+/agent/game-agent
+/agent/results/

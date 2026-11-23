@@ -70,3 +70,23 @@ jobs:
       - name: Check concurrent saves for races
         if: matrix.sanitizer == 'thread'
         run: ctest --test-dir build -R runtime --output-on-failure
+  agent:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: agent/go.mod
+          cache: false
+      - name: Build headless environments without graphics dependencies
+        run: |
+          cmake -S . -B build-headless -DGAMES_BUILD_UI=OFF -DCMAKE_BUILD_TYPE=Release
+          cmake --build build-headless --parallel 4
+          ctest --test-dir build-headless --output-on-failure
+      - name: Check agent parsing and HTTP bounds
+        working-directory: agent
+        run: |
+          go test -race ./...
+          go vet ./...
+      - name: Check worker scripts
+        run: bash -n agent/scripts/worker.sh agent/sandbox/seal.sh agent/sandbox/verify.sh

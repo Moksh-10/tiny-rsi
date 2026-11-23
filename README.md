@@ -107,3 +107,10 @@ ctest --test-dir build-tsan -R runtime --output-on-failure
 ```
 
 Measured v0.3 frame times, memory tradeoffs and raw benchmark output: `docs/performance.md`.
+
+## Two-game AI research platform
+
+The Ascent is now included under `games/getting-over-it` with its Git history.
+Both native games build from the root CMake project. The guest-only Ollama actor,
+headless environment protocol, isolated VM setup and research roadmap are in
+[agent/README.md](agent/README.md). Run `agent/scripts/worker.sh` for usage.
