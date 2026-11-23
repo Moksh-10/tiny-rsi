@@ -24,7 +24,7 @@ func TestActionParsing(t *testing.T) {
 	}
 }
 func TestSchema(t *testing.T) {
-	b, _ := json.Marshal(schema("getting-over-it"))
+	b, _ := json.Marshal(schema("getting-over-it", nil))
 	if !strings.Contains(string(b), `"hold"`) {
 		t.Fatal(string(b))
 	}
@@ -43,4 +43,21 @@ type fakeTransport struct{}
 
 func (fakeTransport) RoundTrip(q *http.Request) (*http.Response, error) {
 	return &http.Response{StatusCode: 200, Body: io.NopCloser(strings.NewReader(strings.Repeat("x", maxResponse+1))), Header: make(http.Header)}, nil
+}
+
+func TestFlyingSchemaExcludesUnavailableActions(t *testing.T) {
+	b, _ := json.Marshal(schema("angry-birds", object{"observation": object{"phase": "flying", "ability_ready": false}}))
+	if strings.Contains(string(b), "launch") || strings.Contains(string(b), "ability") || strings.Contains(string(b), `"x"`) {
+		t.Fatal(string(b))
+	}
+}
+func TestPromptCompactionKeepsOriginal(t *testing.T) {
+	original := object{"x": 1.23456789}
+	copy := compact(original).(object)
+	if original["x"] == copy["x"] {
+		t.Fatal("not compacted")
+	}
+	if original["x"] != 1.23456789 {
+		t.Fatal("mutated original")
+	}
 }

@@ -63,7 +63,11 @@ GUEST
   STEPS=${3:-32}
   [[ $STEPS =~ ^[0-9]+$ && $STEPS -ge 1 && $STEPS -le 10000 ]] || exit 2
   limactl shell "$VM" sudo bash /opt/game-research/current/agent/sandbox/verify.sh
-  RUN="${GAME}-$(date -u +%Y%m%dT%H%M%SZ)"
+  LEVEL=${4:-0}
+  [[ $LEVEL =~ ^[0-9]+$ && $LEVEL -le 11 ]] || exit 2
+  [[ $GAME != getting-over-it || $LEVEL = 0 ]] || exit 2
+  RUN="${GAME}-level${LEVEL}-$(date -u +%Y%m%dT%H%M%SZ)"
+  STATUS=0
   limactl shell "$VM" sudo systemd-run --unit=game-rollout --wait --pipe --collect \
     -p User=researcher -p Group=researcher -p NoNewPrivileges=yes \
     -p ProtectSystem=strict -p ProtectHome=yes -p PrivateTmp=yes \
@@ -71,12 +75,13 @@ GUEST
     -p TasksMax=64 -p CPUQuota=100% -p RuntimeMaxSec=1500 \
     -p LimitFSIZE=67108864 -p RestrictSUIDSGID=yes -p CapabilityBoundingSet= \
     -p RestrictAddressFamilies='AF_UNIX AF_INET AF_INET6' \
-    /opt/game-research/game-agent --model "$MODEL" --game "$GAME" --steps "$STEPS" \
-    --output "/var/lib/game-research/results/$RUN.jsonl"
+    /opt/game-research/game-agent --model "$MODEL" --game "$GAME" --steps "$STEPS" --level "$LEVEL" \
+    --output "/var/lib/game-research/results/$RUN.jsonl" || STATUS=$?
   mkdir -p "$ROOT/agent/results"
   limactl shell "$VM" sudo cat "/var/lib/game-research/results/$RUN.jsonl" > "$ROOT/agent/results/$RUN.jsonl"
   echo "Saved $ROOT/agent/results/$RUN.jsonl"
+  exit "$STATUS"
   ;;
  stop) limactl stop "$VM" ;;
- *) echo 'Usage: worker.sh start|deploy|pull|seal|run [angry-birds|getting-over-it] [steps]|stop' ;;
+ *) echo 'Usage: worker.sh start|deploy|pull|seal|run [angry-birds|getting-over-it] [steps] [level]|stop' ;;
 esac

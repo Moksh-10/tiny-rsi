@@ -10,6 +10,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"math"
 	"net/http"
 	"os"
 	"os/exec"
@@ -140,18 +141,66 @@ func api(ctx context.Context, client *http.Client, path string, body any, result
 	}
 	return json.Unmarshal(b, result)
 }
-func schema(game string) object {
+
+// Restrict model choices to currently legal tools; the engine still validates every action.
+func schema(game string, state object) object {
 	num := func(lo, hi float64) object { return object{"type": "number", "minimum": lo, "maximum": hi} }
-	props := object{"type": object{"type": "string", "enum": []string{"launch", "wait", "ability"}}, "ticks": object{"type": "integer", "minimum": 1, "maximum": 120}, "x": num(-95, 95), "y": num(-95, 95)}
-	required := []string{"type", "ticks"}
-	if game == "getting-over-it" {
-		props["type"] = object{"type": "string", "const": "hammer"}
-		props["x"] = num(-3.15, 3.15)
-		props["y"] = num(-3.15, 3.15)
-		props["hold"] = object{"type": "boolean"}
-		required = []string{"type", "ticks", "x", "y", "hold"}
+	ticks := object{"type": "integer", "enum": []int{15, 30, 60, 120}}
+	variant := func(kind string, aim, hold bool) object {
+		props := object{"type": object{"type": "string", "const": kind}, "ticks": ticks}
+		required := []string{"type", "ticks"}
+		if aim {
+			limit := 95.0
+			if hold {
+				limit = 3.15
+			}
+			props["x"] = num(-limit, limit)
+			props["y"] = num(-limit, limit)
+			required = append(required, "x", "y")
+		}
+		if hold {
+			props["hold"] = object{"type": "boolean"}
+			required = append(required, "hold")
+		}
+		return object{"type": "object", "properties": props, "required": required, "additionalProperties": false}
 	}
-	return object{"type": "object", "properties": props, "required": required, "additionalProperties": false}
+	if game == "getting-over-it" {
+		return variant("hammer", true, true)
+	}
+	choices := []object{variant("wait", false, false)}
+	obs, _ := state["observation"].(map[string]any)
+	if obs["phase"] == "aiming" {
+		choices = append(choices, variant("launch", true, false))
+	}
+	if ready, _ := obs["ability_ready"].(bool); ready {
+		choices = append(choices, variant("ability", false, false))
+	}
+	if len(choices) == 1 {
+		return choices[0]
+	}
+	return object{"anyOf": choices}
+}
+
+// Compact the model-facing copy; preserve full precision in trajectories and replays.
+func compact(v any) any {
+	switch x := v.(type) {
+	case float64:
+		return math.Round(x*1000) / 1000
+	case map[string]any:
+		r := object{}
+		for k, v := range x {
+			r[k] = compact(v)
+		}
+		return r
+	case []any:
+		r := make([]any, len(x))
+		for i, v := range x {
+			r[i] = compact(v)
+		}
+		return r
+	default:
+		return v
+	}
 }
 func actionFrom(content string) (object, error) {
 	dec := json.NewDecoder(strings.NewReader(content))
@@ -169,8 +218,7 @@ func actionFrom(content string) (object, error) {
 	}
 	return a, nil
 }
-func boolean(m object, key string) bool   { v, _ := m[key].(bool); return v }
-func number(m object, key string) float64 { v, _ := m[key].(float64); return v }
+func boolean(m object, key string) bool { v, _ := m[key].(bool); return v }
 
 type chatResponse struct {
 	Message struct {
@@ -223,6 +271,11 @@ func run() error {
 	if digest == "" {
 		return fmt.Errorf("model %q is not installed in the guest", *model)
 	}
+	var version object
+	if err := api(ctx, client, "/api/version", nil, &version); err != nil {
+		return err
+	}
+	options := object{"num_ctx": 8192, "num_predict": 256, "temperature": 0, "seed": 0, "num_thread": 4}
 	var capabilities object
 	if err := api(ctx, client, "/api/show", object{"model": *model}, &capabilities); err != nil {
 		return err
@@ -239,7 +292,7 @@ func run() error {
 		}
 		return file.Sync()
 	}
-	if err = write(object{"event": "metadata", "protocol": 1, "revision": revision, "model": *model, "digest": digest, "capabilities": capabilities["capabilities"], "game": *game, "level": *level, "track": "structured-state", "started": time.Now().UTC(), "max_steps": *steps, "token_budget": *tokens}); err != nil {
+	if err = write(object{"event": "metadata", "protocol": 1, "revision": revision, "model": *model, "digest": digest, "capabilities": capabilities["capabilities"], "ollama_version": version["version"], "options": options, "game": *game, "level": *level, "track": "structured-state", "started": time.Now().UTC(), "max_steps": *steps, "token_budget": *tokens}); err != nil {
 		return err
 	}
 	env, err := startEnvironment(ctx, *envPath)
@@ -262,8 +315,17 @@ func run() error {
 	if err = write(object{"event": "reset", "request": reset, "response": state}); err != nil {
 		return err
 	}
-	instructions, _ := json.Marshal(desc)
-	system := "You control a physics game through ONE JSON action per response. Return only an action matching the schema. No shell, text, or code. Fixed simulation time: ticks/60 seconds. Try to win and use observations to correct your strategy. Angry Birds: negative pull x launches right, positive pull y launches upward, pull length must be <=95. Wait while flying; use ability only if ready. Ascent: aim relative to shoulder; hold to anchor on terrain, then change aim to push/pull your body. Rules: " + string(instructions)
+	rulesKey := "angry_birds"
+	if *game == "getting-over-it" {
+		rulesKey = "getting_over_it"
+	}
+	instructions, _ := json.Marshal(desc[rulesKey])
+	system := "Control the game using exactly one JSON action matching the provided schema. No commentary or code. Each tick is 1/60 simulated second. Choices are limited to currently available actions. Rules: " + string(instructions)
+	if *game == "angry-birds" {
+		system += " Goal: hit all pigs. The slingshot is at [210,438]. Pull LEFT (negative x) and DOWN (positive y) to shoot RIGHT and UP. Example valid launch: {\"type\":\"launch\",\"x\":-75,\"y\":45,\"ticks\":120}. Adjust aim based on target positions. Pull length cannot exceed 95. While flying, wait for 120 ticks to observe the trajectory, or activate an available ability. Do not attempt another launch until phase is aiming. Prefer ticks=120 for waits."
+	} else {
+		system += " Goal: climb to height 66. Aim x,y relative to your shoulder: right is positive x, up is positive y. Reach is 3.15m. To move right, reach right/down toward terrain, hold to anchor, then change aim left/down to pull your body toward the hammer. A grip must touch terrain. Use ticks=15 or 30 to observe and adjust. Example action shape: {\"type\":\"hammer\",\"x\":3,\"y\":-1,\"hold\":true,\"ticks\":30}."
+	}
 	used, invalid, executed := 0, 0, 0
 	reason := "decision_limit"
 	last := ""
@@ -274,7 +336,7 @@ func run() error {
 			break
 		}
 		// Reserve enough room for the current bounded observation and completion.
-		obs, _ := json.Marshal(state)
+		obs, _ := json.Marshal(compact(state))
 		if used+len(system)+len(obs)+len(last)+384 > *tokens {
 			reason = "token_budget"
 			break
@@ -283,7 +345,7 @@ func run() error {
 		if last != "" {
 			content += "\nPrevious attempt: " + last
 		}
-		body := object{"model": *model, "stream": false, "format": schema(*game), "messages": []object{{"role": "system", "content": system}, {"role": "user", "content": content}}, "options": object{"num_ctx": 8192, "num_predict": 256, "temperature": 0, "seed": 0, "num_thread": 4}, "keep_alive": "5m"}
+		body := object{"model": *model, "stream": false, "format": schema(*game, state), "messages": []object{{"role": "system", "content": system}, {"role": "user", "content": content}}, "options": options, "keep_alive": "5m"}
 		var reply chatResponse
 		callStart := time.Now()
 		if err = api(ctx, client, "/api/chat", body, &reply); err != nil {
@@ -322,6 +384,9 @@ func run() error {
 			reason = "token_budget"
 			break
 		}
+	}
+	if boolean(state, "terminated") || boolean(state, "truncated") {
+		reason = "environment_finished"
 	}
 	summary := object{"event": "summary", "reason": reason, "executed_actions": executed, "invalid_actions": invalid, "tokens": used, "elapsed_ms": time.Since(started).Milliseconds(), "final": state}
 	if err = write(summary); err != nil {

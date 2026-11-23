@@ -37,6 +37,12 @@ rollout. The marker is an operational prerequisite, not a proof against a
 malicious guest administrator. The trusted host launcher and guest root remain
 part of the trust boundary.
 
+The model-facing action schema is state-dependent and offers tick choices 15,
+30, 60 and 120; the underlying environment accepts every integer 1–120.
+Model-facing geometry is rounded to 0.001 units to reduce prompt cost; logs and
+replays preserve full engine precision. For a level other than zero, use e.g.
+`agent/scripts/worker.sh run angry-birds 32 5`.
+
 Each episode has decision, token, wall-time, action-size and simulation-time
 limits. Five rejected actions stop an episode. Defaults: 32 decisions, 30,000
 prompt-plus-output tokens, 20 minutes, 120 ticks per action, 18,000 ticks total.
