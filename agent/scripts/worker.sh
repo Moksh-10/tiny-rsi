@@ -8,7 +8,7 @@ MODEL=${MODEL:-qwen2.5:3b}
 case ${1:-help} in
  start)
   mkdir -p "$LIMA_HOME"
-  if limactl list --format '{{.Name}}' | grep -qx "$VM"; then
+  if limactl list --format '{{.Name}}' | grep -x "$VM" >/dev/null; then
     limactl start --tty=false "$VM"
   else
     limactl start --name="$VM" --tty=false "$ROOT/agent/sandbox/lima.yaml"
