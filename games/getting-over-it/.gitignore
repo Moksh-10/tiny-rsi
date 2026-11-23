@@ -1,0 +1,11 @@
+/build/
+/.cache/
+.DS_Store
+*.log
+/build-tests/
+/package/
+/ascent-preview.png
+*.save
+*.save.tmp
+
+/ascent-*.png
