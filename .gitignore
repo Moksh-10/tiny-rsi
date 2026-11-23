@@ -7,3 +7,5 @@ progress.dat.tmp
 /.workers/
 /agent/game-agent
 /agent/results/
+__pycache__/
+*.pyc

@@ -1,11 +1,13 @@
 """Protocol contracts, invalid-action atomicity, termination and deterministic replays."""
+import os
 import json
 import subprocess
 import sys
 import unittest
 
-EXE = sys.argv.pop()
+EXE = sys.argv.pop() if __name__ == '__main__' else os.environ.get('GAME_ENV_TEST')
 
+@unittest.skipUnless(EXE, 'Run protocol integration through CTest or set GAME_ENV_TEST')
 class Protocol(unittest.TestCase):
     def setUp(self):
         self.p = subprocess.Popen([EXE], stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True)

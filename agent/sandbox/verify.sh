@@ -1,5 +1,7 @@
 #!/bin/bash
 set -euo pipefail
+ROLE=${1:-inference}
+[[ $ROLE = inference || $ROLE = execution ]]
 [[ $(id -u) = 0 ]]
 [[ $(systemd-detect-virt --vm) != none ]]
 [[ -z $(findmnt -rn -t virtiofs,9p,fuse.sshfs || true) ]]
@@ -16,5 +18,7 @@ nft list chain inet game_research input | grep 'policy drop' >/dev/null
 if sudo -u researcher curl --noproxy '*' -fsS --connect-timeout 2 --max-time 3 https://example.com >/dev/null 2>&1; then
   echo 'ERROR: guest egress remains open' >&2; exit 1
 fi
-curl --noproxy '*' -fsS http://127.0.0.1:11434/api/tags >/dev/null
-printf 'VM boundary verified: no host shares; unprivileged actor; egress blocked; guest Ollama ready\n'
+if [[ $ROLE = inference ]]; then
+  curl --noproxy '*' -fsS http://127.0.0.1:11434/api/tags >/dev/null
+fi
+printf 'VM boundary verified (%s): no host shares; unprivileged actor; egress blocked\n' "$ROLE"

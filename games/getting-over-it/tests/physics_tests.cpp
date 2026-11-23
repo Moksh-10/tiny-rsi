@@ -7,6 +7,14 @@ void require(bool value,const char*message){if(!value){std::cerr<<"FAIL: "<<mess
 int main(){
  Player summit; summit.position.y=65.75f; require(!reachedSummit(summit),"summit boundary remains strict");
  summit.position.y=65.76f; require(reachedSummit(summit),"native and agent use the same victory predicate");
+ // Unanchored mouse movement must not generate airborne body momentum.
+ Player passive,active;passive.position=active.position={0,100};passive.tip=active.tip={2,101.2f};
+ for(int i=0;i<240;i++){
+  passive.step(1.f/120,{2,1.2f},false,{});
+  active.step(1.f/120,{3.1f*std::cos(i*.71f),3.1f*std::sin(i*.71f)},i%2,{});
+  require(length(active.position-passive.position)<1e-4f&&length(active.velocity-passive.velocity)<1e-4f,"airborne mouse cannot inject body momentum");
+  require(!active.gripping&&active.position.y<=100.0001f,"airborne hammer cannot latch or gain height without terrain");
+ }
  Rock box{{{-2,-2},{2,-2},{2,0},{-2,0}},2,0};
  auto top=collide({0,.3f},.5f,box);require(top.hit&&top.normal.y>.99f&&std::abs(top.penetration-.2f)<.001f,"top surface collision");
  auto inside=collide({0,-.1f},.5f,box);require(inside.hit&&inside.normal.y>.99f&&std::abs(inside.penetration-.6f)<.001f,"embedded bodies eject outward");

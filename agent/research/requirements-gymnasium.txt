@@ -1,0 +1,2 @@
+# Optional adapter only. Base environment/evaluation/training use the stdlib.
+gymnasium==1.2.3

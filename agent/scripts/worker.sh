@@ -1,7 +1,12 @@
 #!/bin/bash
 # Trusted host control plane; the actor and inference never run on macOS.
 set -euo pipefail
-ROOT=$(cd "$(dirname "$0")/../.." && pwd)
+ROOT=${GAME_LAB_ROOT:-$(cd "$(dirname "$0")/../.." && pwd)}
+# Read the whole trusted launcher before running: edits cannot corrupt active jobs.
+if [[ ${GAME_LAB_SNAPSHOT:-0} != 1 ]]; then
+  SCRIPT=$(cat "$0")
+  exec env GAME_LAB_ROOT="$ROOT" GAME_LAB_SNAPSHOT=1 /bin/bash -c "$SCRIPT" -- "$@"
+fi
 export LIMA_HOME="$ROOT/.workers/lima"
 VM=game-worker
 MODEL=${MODEL:-qwen2.5:3b}
