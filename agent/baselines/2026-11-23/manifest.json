@@ -1,0 +1,103 @@
+{
+  "scope": "Individual smoke episodes; not a statistical benchmark or evidence of weight learning",
+  "track": "structured-state",
+  "date": "2026-11-23",
+  "host": {
+    "cpu": "Apple M2",
+    "architecture": "arm64",
+    "ram_gib": 16
+  },
+  "guest": {
+    "backend": "Lima 2.3.0 / Apple VZ",
+    "os": "Ubuntu 24.04 arm64",
+    "vcpus": 4,
+    "ram_gib": 6,
+    "disk_gib": 24,
+    "ollama_version": "0.40.16",
+    "model": "qwen2.5:3b",
+    "quantization": "Q4_K_M",
+    "actor_memory_limit_mib": 512,
+    "ollama_memory_limit_gib": 4,
+    "network": "loopback plus inbound management SSH only",
+    "host_mounts": []
+  },
+  "replay": {
+    "verified": true,
+    "response_records": 40,
+    "tolerance": 1e-05
+  },
+  "runs": [
+    {
+      "trajectory": "initial/angry-birds.jsonl",
+      "revision": "2ac2286c31a1afabd9d58f647dae8c1383c661e4",
+      "model": "qwen2.5:3b",
+      "digest": "357c53fb659c5076de1d65ccb0b397446227b71a42be9d1603d46168015c9e4b",
+      "game": "angry-birds",
+      "level": 0,
+      "executed_actions": 1,
+      "invalid_actions": 5,
+      "tokens": 6944,
+      "elapsed_ms": 27286,
+      "mean_decision_ms": 4545.5,
+      "reason": "invalid_action_limit",
+      "success": false,
+      "simulation_ticks": 1,
+      "score": 0,
+      "best_height": null
+    },
+    {
+      "trajectory": "initial/getting-over-it.jsonl",
+      "revision": "2ac2286c31a1afabd9d58f647dae8c1383c661e4",
+      "model": "qwen2.5:3b",
+      "digest": "357c53fb659c5076de1d65ccb0b397446227b71a42be9d1603d46168015c9e4b",
+      "game": "getting-over-it",
+      "level": 0,
+      "executed_actions": 12,
+      "invalid_actions": 0,
+      "tokens": 17481,
+      "elapsed_ms": 158718,
+      "mean_decision_ms": 13223.75,
+      "reason": "decision_limit",
+      "success": false,
+      "simulation_ticks": 30,
+      "score": null,
+      "best_height": 0
+    },
+    {
+      "trajectory": "state-aware/angry-birds.jsonl",
+      "revision": "dc479efef090a8dc8329cac2b73233c6bb55e906",
+      "model": "qwen2.5:3b",
+      "digest": "357c53fb659c5076de1d65ccb0b397446227b71a42be9d1603d46168015c9e4b",
+      "game": "angry-birds",
+      "level": 0,
+      "executed_actions": 6,
+      "invalid_actions": 0,
+      "tokens": 4599,
+      "elapsed_ms": 42561,
+      "mean_decision_ms": 7088.33,
+      "reason": "environment_finished",
+      "success": false,
+      "simulation_ticks": 634,
+      "score": 0,
+      "best_height": null
+    },
+    {
+      "trajectory": "state-aware/getting-over-it.jsonl",
+      "revision": "dc479efef090a8dc8329cac2b73233c6bb55e906",
+      "model": "qwen2.5:3b",
+      "digest": "357c53fb659c5076de1d65ccb0b397446227b71a42be9d1603d46168015c9e4b",
+      "game": "getting-over-it",
+      "level": 0,
+      "executed_actions": 12,
+      "invalid_actions": 0,
+      "tokens": 8351,
+      "elapsed_ms": 65814,
+      "mean_decision_ms": 5480.58,
+      "reason": "decision_limit",
+      "success": false,
+      "simulation_ticks": 180,
+      "score": null,
+      "best_height": 0.3217250108718872
+    }
+  ]
+}

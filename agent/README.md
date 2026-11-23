@@ -24,7 +24,8 @@ agent/scripts/worker.sh stop
 ```
 
 `MODEL=qwen2.5:3b` is the default. Set `MODEL` on both `pull` and `run` to try
-another Ollama model. It must support text generation and schema-constrained
+another Ollama model. Larger models require a corresponding guest/service
+memory budget adjustment. It must support text generation and schema-constrained
 JSON well enough to produce valid actions. The runner detects installed models,
 records their digests/capabilities, and rejects unavailable models. It does not
 promise that every Ollama model can play effectively. No cloud API key is used.
@@ -71,7 +72,8 @@ restricted systemd unit: read-only system/home protection, a private temporary
 directory, no capabilities or privilege escalation, a 512 MiB actor memory
 limit, one CPU quota, 64 tasks, a 64 MiB file-size limit and a 25-minute service
 limit. Ollama is a separate unprivileged guest service with a 4 GiB memory limit.
-Only the results directory is writable to the actor. The model has no shell,
+Only the results directory is writable for persistent output; the actor also
+has its private temporary directory. The model has no shell,
 filesystem or arbitrary process tool. The C++ subprocess path is operator
 configuration, never a model-selected path.
 
@@ -149,3 +151,6 @@ References informing the design:
 Context7 was consulted for Ollama API behavior; Exa was unavailable in the
 connected tools during planning. These references inform the architecture;
 this first milestone does not reproduce frontier-scale training results.
+
+The first executed baseline traces and limitations are preserved in
+[baselines/2026-11-23](baselines/2026-11-23/README.md).
