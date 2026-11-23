@@ -71,7 +71,7 @@ class Environment {
             obs={{"position",vec(player.position.x,player.position.y)},{"velocity",vec(player.velocity.x,player.velocity.y)},
                  {"tip",vec(player.tip.x,player.tip.y)},{"aim",vec(player.aim.x,player.aim.y)},
                  {"gripping",player.gripping},{"grounded",player.grounded},{"best_height",player.runBest},
-                 {"falls",player.falls},{"nearby_terrain",nearby},{"summit_height",ascent::summitHeight}};
+                 {"falls",player.falls},{"nearby_terrain",nearby},{"summit_height",ascent::summitHeight},{"winning_body_height",ascent::victoryBodyHeight}};
         }
         return {{"ok",true},{"protocol",1},{"game",game},{"observation",obs},{"reward",reward},
                 {"terminated",terminated},{"truncated",ticks>=maxTicks&&!terminated},
@@ -132,7 +132,7 @@ public:
         int advanced=0;
         for(int i=0;i<count&&!done();++i) {
             if(birds) {birds->step(1.f/60);terminated=birds->phase()==birds::Phase::Won||birds->phase()==birds::Phase::Lost;}
-            else {player.step(1.f/120,{x,y},hold,terrain);player.step(1.f/120,{x,y},hold,terrain);terminated=player.position.y-.55f>=ascent::summitHeight;}
+            else {player.step(1.f/120,{x,y},hold,terrain);player.step(1.f/120,{x,y},hold,terrain);terminated=ascent::reachedSummit(player);}
             ++ticks;++advanced;
         }
         return result(value()-before-advanced*0.00001);

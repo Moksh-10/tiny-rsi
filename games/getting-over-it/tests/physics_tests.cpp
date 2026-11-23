@@ -5,6 +5,8 @@
 using namespace ascent;
 void require(bool value,const char*message){if(!value){std::cerr<<"FAIL: "<<message<<'\n';std::exit(1);}}
 int main(){
+ Player summit; summit.position.y=65.75f; require(!reachedSummit(summit),"summit boundary remains strict");
+ summit.position.y=65.76f; require(reachedSummit(summit),"native and agent use the same victory predicate");
  Rock box{{{-2,-2},{2,-2},{2,0},{-2,0}},2,0};
  auto top=collide({0,.3f},.5f,box);require(top.hit&&top.normal.y>.99f&&std::abs(top.penetration-.2f)<.001f,"top surface collision");
  auto inside=collide({0,-.1f},.5f,box);require(inside.hit&&inside.normal.y>.99f&&std::abs(inside.penetration-.6f)<.001f,"embedded bodies eject outward");

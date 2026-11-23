@@ -43,6 +43,7 @@ Bird reward = score difference / 1000 minus 0.00001 per advanced tick. Both win
 and loss terminate; `info.success` distinguishes them. Ascent reward = increase
 in run-best height / 66 minus the same tick cost. Falls preserve run-best as in
 the native game; repeated recovery does not repeatedly earn height reward.
-Reaching the native 66m summit terminates. Both games truncate at 18,000 ticks
+Crossing the native victory threshold (body center y > 65.75m) terminates;
+the shared `reachedSummit` predicate is used by both UI and headless play. Both games truncate at 18,000 ticks
 (300 simulated seconds), unless they terminate on that tick. These are initial
 benchmark rewards, not evidence of a learned policy.

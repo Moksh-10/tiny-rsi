@@ -123,7 +123,7 @@ int main(int argc,char**argv){
    }
    saveTimer+=dt;if(saveTimer>5&&player.grounded){saveProgress(player,audio.enabled,sensitivity);saveTimer=0;}
    int nextStage=player.runBest>44?2:player.runBest>23?1:0;if(nextStage>stage){stage=nextStage;notify(stage==1?"CHAPTER II  /  THE WEATHERED HEIGHTS":"CHAPTER III  /  ABOVE THE CLOUDS");}
-   if(player.position.y>65.75f&&!victoryAcknowledged){victoryAcknowledged=true;screen=Screen::Victory;saveProgress(player,audio.enabled,sensitivity);}
+   if(ascent::reachedSummit(player)&&!victoryAcknowledged){victoryAcknowledged=true;screen=Screen::Victory;saveProgress(player,audio.enabled,sensitivity);}
   }else accumulator=0;
   for(auto&p:particles){p.life-=dt;p.velocity.y-=6*dt;p.position+=p.velocity*dt;}particles.erase(std::remove_if(particles.begin(),particles.end(),[](auto&p){return p.life<=0;}),particles.end());
   ascent::Vec desiredCamera=screen==Screen::Intro?ascent::Vec{-1,6.2f}:ascent::Vec{std::clamp(player.position.x+1.0f,-4.f,5.f),std::max(6.2f,player.position.y+3.4f)};

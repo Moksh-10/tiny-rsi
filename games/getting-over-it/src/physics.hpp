@@ -19,4 +19,6 @@ struct Player {
  void step(float dt,Vec desired,bool hold,const std::vector<Rock>& terrain);
 };
 constexpr float summitHeight=66;
+constexpr float victoryBodyHeight=65.75f;
+inline bool reachedSummit(const Player& player){return player.position.y>victoryBodyHeight;}
 }
