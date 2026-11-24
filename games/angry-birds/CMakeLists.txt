@@ -1,0 +1,52 @@
+cmake_minimum_required(VERSION 3.24)
+if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
+  project(SlingshotValley VERSION 0.3.0 LANGUAGES C CXX)
+  set(CMAKE_CXX_STANDARD 20)
+  set(CMAKE_CXX_STANDARD_REQUIRED ON)
+  option(GAMES_BUILD_UI "Build the native graphical game" ON)
+  include(CTest)
+  include(../../cmake/Sanitizers.cmake)
+  include(../../cmake/Dependencies.cmake)
+endif()
+add_library(birds_simulation src/simulation.cpp src/levels.cpp src/progress.cpp src/save_worker.cpp)
+target_include_directories(birds_simulation PUBLIC src)
+target_link_libraries(birds_simulation PUBLIC box2d Threads::Threads)
+target_compile_options(birds_simulation PRIVATE -Wall -Wextra -Wpedantic)
+if(GAMES_BUILD_UI)
+  add_executable(angry-birds src/main.cpp src/presentation.cpp src/graphics.cpp)
+  target_link_libraries(angry-birds PRIVATE birds_simulation raylib)
+  target_compile_definitions(angry-birds PRIVATE ASSET_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}/assets")
+  set_target_properties(angry-birds PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/games/angry-birds")
+  if(APPLE)
+    set_target_properties(angry-birds PROPERTIES MACOSX_BUNDLE TRUE
+      MACOSX_BUNDLE_GUI_IDENTIFIER "com.moksh.slingshotvalley"
+      MACOSX_BUNDLE_BUNDLE_NAME "Slingshot Valley"
+      MACOSX_BUNDLE_ICON_FILE "icon.icns"
+      MACOSX_BUNDLE_SHORT_VERSION_STRING "0.3.0"
+      MACOSX_BUNDLE_BUNDLE_VERSION "3")
+    add_custom_command(TARGET angry-birds POST_BUILD
+      COMMAND ${CMAKE_COMMAND} -E make_directory "$<TARGET_FILE_DIR:angry-birds>/../Resources"
+      COMMAND ${CMAKE_COMMAND} -E copy_if_different "${CMAKE_CURRENT_SOURCE_DIR}/assets/icon.icns" "$<TARGET_FILE_DIR:angry-birds>/../Resources/icon.icns"
+      COMMAND ${CMAKE_COMMAND} -E create_symlink "$<TARGET_FILE:angry-birds>" "${CMAKE_BINARY_DIR}/games/angry-birds/angry-birds")
+  endif()
+  add_custom_command(TARGET angry-birds POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_directory "${CMAKE_CURRENT_SOURCE_DIR}/assets" "$<TARGET_FILE_DIR:angry-birds>/assets")
+  target_compile_options(angry-birds PRIVATE -Wall -Wextra -Wpedantic)
+endif()
+option(SLINGSHOT_UI_TESTS "Run graphical menu-flow tests (requires a display)" OFF)
+if(BUILD_TESTING)
+  add_executable(simulation-tests tests/simulation_test.cpp)
+  target_link_libraries(simulation-tests PRIVATE birds_simulation)
+  add_test(NAME simulation COMMAND simulation-tests)
+  set_tests_properties(simulation PROPERTIES TIMEOUT 30)
+  if(GAMES_BUILD_UI)
+    add_executable(runtime-tests tests/runtime_test.cpp)
+    target_link_libraries(runtime-tests PRIVATE birds_simulation raylib)
+    add_test(NAME runtime COMMAND runtime-tests)
+    set_tests_properties(runtime PROPERTIES TIMEOUT 30)
+  endif()
+  if(SLINGSHOT_UI_TESTS AND GAMES_BUILD_UI)
+    add_test(NAME ui-flow COMMAND angry-birds --test-ui)
+    set_tests_properties(ui-flow PROPERTIES TIMEOUT 60)
+  endif()
+endif()

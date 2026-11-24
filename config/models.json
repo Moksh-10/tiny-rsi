@@ -1,0 +1,11 @@
+{
+  "schema_version": 1,
+  "endpoint": "http://127.0.0.1:11434",
+  "max_loaded_models": 1,
+  "roles": {
+    "teacher": {"model": "qwen2.5:3b", "context_tokens": 4096},
+    "student": {"model": "qwen2.5:0.5b", "context_tokens": 4096},
+    "evaluator": {"model": "qwen2.5:3b", "context_tokens": 4096},
+    "researcher": {"model": "qwen2.5:3b", "context_tokens": 4096}
+  }
+}

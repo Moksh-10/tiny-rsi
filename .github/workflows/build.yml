@@ -5,7 +5,7 @@ on:
 permissions:
   contents: read
 concurrency:
-  group: slingshot-${{ github.workflow }}-${{ github.ref }}
+  group: tiny-rsi-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 jobs:
   verify:
@@ -32,7 +32,7 @@ jobs:
         if: runner.os == 'macOS'
         run: |
           set +e
-          ./build/angry-birds --smoke-test > build/display-smoke.log 2>&1
+          ./build/games/angry-birds/angry-birds --smoke-test > build/display-smoke.log 2>&1
           result=$?
           set -e
           cat build/display-smoke.log
@@ -50,8 +50,8 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: runner.os == 'macOS'
         with:
-          name: Slingshot-Valley-macOS
-          path: dist/Slingshot-Valley-macOS.zip
+          name: tiny-rsi-macOS-games
+          path: dist/*-macOS.zip
   sanitizers:
     runs-on: macos-latest
     strategy:
@@ -61,7 +61,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Configure sanitizer
-        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug -DSLINGSHOT_SANITIZER=${{ matrix.sanitizer }}
+        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug -DTINY_RSI_SANITIZER=${{ matrix.sanitizer }}
       - name: Build runtime checks
         run: cmake --build build --target runtime-tests simulation-tests --parallel 4
       - name: Check memory and undefined behavior
@@ -70,23 +70,22 @@ jobs:
       - name: Check concurrent saves for races
         if: matrix.sanitizer == 'thread'
         run: ctest --test-dir build -R runtime --output-on-failure
-  agent:
+  research:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-python@v5
         with:
-          go-version-file: agent/go.mod
-          cache: false
+          python-version: '3.12'
       - name: Build headless environments without graphics dependencies
         run: |
           cmake -S . -B build-headless -DGAMES_BUILD_UI=OFF -DCMAKE_BUILD_TYPE=Release
           cmake --build build-headless --parallel 4
           ctest --test-dir build-headless --output-on-failure
-      - name: Check agent parsing and HTTP bounds
-        working-directory: agent
+      - name: Install and check Python research runtime
         run: |
-          go test -race ./...
-          go vet ./...
-      - name: Check worker scripts
-        run: bash -n agent/scripts/worker.sh agent/sandbox/seal.sh agent/sandbox/verify.sh
+          python -m pip install --no-deps -e research
+          tiny-rsi --help
+          python -m unittest discover -s research/tests -p '*test*.py'
+      - name: Check sandbox launchers
+        run: bash -n scripts/*.sh sandbox/scripts/*.sh

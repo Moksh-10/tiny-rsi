@@ -8,6 +8,8 @@ No JavaScript, TypeScript, Node, npm, browser, or web runtime. Rendering, input,
 
 ## Build and play
 
+The following commands run from the Tiny RSI repository root (CMake 3.24+).
+
 Install a C++ compiler and CMake 3.20 or newer. On macOS, Apple's command line tools provide the compiler (`xcode-select --install`).
 
 ```sh
@@ -18,10 +20,10 @@ cmake --build build --config Release --parallel
 On macOS:
 
 ```sh
-open build/the_ascent.app
+open build/games/getting-over-it/the_ascent.app
 ```
 
-On Linux: `./build/the_ascent`. On Windows with Visual Studio: `build\Release\the_ascent.exe`.
+On Linux: `./build/games/getting-over-it/the_ascent`. On Windows with Visual Studio: `build\games\getting-over-it\Release\the_ascent.exe`.
 
 Linux requires the X11/OpenGL/audio development packages listed in `.github/workflows/build.yml`. macOS and Windows use their native window/audio backends. The first configuration requires Internet access; subsequent builds use CMake's local dependency cache.
 
@@ -65,10 +67,10 @@ ctest --test-dir build-tests --output-on-failure
 The executable's `--smoke-test` option opens a window, renders 12 deterministic frames, exports a PNG, and exits without loading or changing saved progress or responding to input. It fails when shader or shadow-framebuffer initialization or image export fails. It supports `--scene=intro|heights|summit|pause|settings|help|victory` and `--capture=/absolute/path.png`.
 
 ```sh
-bash tests/render_smoke.sh ./build/the_ascent.app/Contents/MacOS/the_ascent /tmp/ascent-render
+bash tests/render_smoke.sh ./build/games/getting-over-it/the_ascent.app/Contents/MacOS/the_ascent /tmp/ascent-render
 ```
 
-On Linux use `./build/the_ascent` as the executable. CI runs all seven scene captures under Xvfb with software OpenGL and uploads images and logs as an artifact. Native build, physics, persistence, and render checks do not replace full-route playtesting, which remains a release check.
+On Linux use `./build/games/getting-over-it/the_ascent` as the executable. CI runs all seven scene captures under Xvfb with software OpenGL and uploads images and logs as an artifact. Native build, physics, persistence, and render checks do not replace full-route playtesting, which remains a release check.
 
 ## Source layout
 

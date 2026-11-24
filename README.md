@@ -1,116 +1,108 @@
-# Angry Birds — Slingshot Valley
+# Tiny RSI
 
-A native C++20 slingshot game with a twelve-level campaign, three illustrated worlds, a persistent star map, and an expressive flock. Built with raylib 5.5 and Box2D 3.1.1.
+A local research platform for Ollama agents playing two native C++ games. The goal
+is to study teacher/student model distillation and bounded automated improvement
+under limited compute. Game execution runs inside Linux VMs, without host mounts.
 
-## Play
+## Repository layout
+
+```text
+config/models.json             Ollama teacher/student/evaluator/researcher roles
+games/angry-birds/              Slingshot Valley: source, assets, tests, game docs
+games/getting-over-it/          The Ascent: source, assets, tests, game docs
+environments/native/           Shared headless C++ JSONL protocol and contract tests
+research/src/tiny_rsi/          Python actors, planning tools, learners and evaluation
+research/tests/                 Mock/numerical research runtime tests
+sandbox/lima/                   Inference and execution VM configurations
+sandbox/scripts/                Guest sealing and boundary verification
+scripts/                       Trusted host launchers and native packaging
+experiments/baselines/          Versioned historical traces and measured evidence
+experiments/results/            Local generated runs and checkpoints (Git ignored)
+cmake/                         Shared native dependencies and sanitizer settings
+docs/                          Platform architecture and research boundaries
+```
+
+Both games live under `games/`; neither game owns the research runtime. C++ is
+used for simulation/rendering. Python handles model interaction, tools, data,
+training and evaluation. Go is not required.
+
+## Build the games
 
 ```sh
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
-cmake --build build --parallel
-./build/angry-birds
-```
-
-On macOS, you can also open `build/angry-birds.app` in Finder. Install Xcode Command Line Tools (`xcode-select --install`) and CMake if needed. Initial configuration downloads the pinned dependencies from GitHub; after building, gameplay is offline.
-
-Start with **Let's Play** or **Choose Level**. Clearing a level unlocks the next, and replaying can improve your best score and stars.
-
-- **Drag the bird back, then release:** aim and launch.
-- **Space** or click the playfield during flight: use Dash's speed boost or Bomb's explosion. Red has no special ability.
-- **P / Escape:** pause or resume. Escape backs out of other screens; on the home screen it quits.
-- **R:** retry the current level.
-- **M:** toggle audio. The sound button is also available in the menus.
-- The pause screen includes resume, retry, level map, help, sound, and home controls.
-
-The game pauses when it loses focus. Resizing keeps the playfield's proportions and pointer alignment. A turn ends when motion settles, with a ten-second cap.
-
-## Campaign
-
-Three chapters, four levels each:
-
-- **Greenwood Grove:** first flight, a broad timber arch, breakable glass houses, and twin forts.
-- **Sunset Canyon:** elevated cliffs and a bridge, an explosive relay, heavy roofs on fragile supports, and a tall central spire.
-- **Moonlight Ridge:** a stepped skyline, a glass pyramid, a fortified powder keg, and a final elevated castle.
-
-Wood, glass, stone, and TNT have distinct physics and damage properties. TNT and Bomb create radial damage and impulses. Physics runs at a fixed 60 Hz with four solver substeps; fast birds use continuous collision detection.
-
-## Graphics and performance
-
-The renderer follows Retina/display pixels up to **3840×2160**, with sharp distance-field text, full-detail mipmapped character/material textures, scenery grading, shadows, and interpolated physics motion. **F11** toggles borderless fullscreen. Use `--render-scale 1`, `2`, or `3` to explicitly choose 720p, 1440p, or 4K. Preview exports default to 1440p.
-
-GPU resources have move-only ownership and exception cleanup. Effects have fixed memory budgets, and music uses a small streamed buffer. A bounded background save worker keeps disk writes off the game loop. Rendering, audio APIs and physics stay on the main thread.
-
-```sh
-./build/angry-birds --render-scale 3
-./build/angry-birds --benchmark --render-scale 3 --benchmark-output build/benchmark-4k.json
-./build/angry-birds --render-scale 3 --render-previews build/previews-4k
-```
-
-See `docs/runtime-design.md` for ownership, threading rules, budgets, tests and benchmark interpretation.
-
-## Saves
-
-Unlocks, stars, best scores, and audio preference are saved automatically. Saves live outside the app so replacing the app preserves progress:
-
-- macOS: `~/Library/Application Support/Slingshot Valley/progress.dat`
-- Linux: `$XDG_DATA_HOME/slingshot-valley/progress.dat`, or `~/.local/share/slingshot-valley/progress.dat`
-- Windows path handling: `%APPDATA%/Slingshot Valley/progress.dat` (Windows builds have not been verified).
-
-Saves are versioned, validated on load, and written by a background worker using unique temporary files followed by rename. The last pending snapshot is drained on shutdown. A failed save is reported in the UI. `--demo`, UI tests, previews, and smoke tests do not read or change real player saves.
-
-## Verification
-
-```sh
+cmake --build build --parallel 4
 ctest --test-dir build --output-on-failure
-./build/angry-birds --test-ui
-./build/angry-birds --smoke-test
-./build/angry-birds --render-previews build/previews
+./build/games/angry-birds/angry-birds
 ```
 
-The simulation suite checks all twelve levels for five seconds of pre-shot stability and verifies three-star winning sequences for every level, retries, finite physics, matching simulation at 30/60/120 FPS, launch constraints, abilities, loss, unlocks, save round trips, and corrupt-save rejection. The stability check also bounds every object’s movement before launch. The UI test exercises play → pause → resume → retry → win → results → next level, map locks, help, audio, and loss → retry using internal controls, without desktop automation. Render previews export the renderer's own textures for all menus and all twelve levels.
+On macOS, open `build/games/getting-over-it/the_ascent.app` for the climbing game.
+See each game's README for controls and graphics options. `scripts/package.sh
+--skip-ui` packages both games; `--game angry-birds` selects one.
 
-To include the graphical UI test in CTest, configure with `-DSLINGSHOT_UI_TESTS=ON`. On headless Linux, run it under `xvfb-run -a`. GitHub Actions builds and runs simulation tests on macOS and Ubuntu. Graphical UI tests run under a virtual display on Ubuntu; hosted macOS runners have no usable OpenGL display. Local macOS UI tests also run under address and undefined-behavior sanitizers. Runtime ownership and concurrent-save tests run under ThreadSanitizer; CI includes both sanitizer modes.
-
-Development shortcuts: `--demo` starts without player saves; `--level 1` through `--level 12` open a level directly. Invalid options exit with code 2.
-
-## Package
+For research without graphics dependencies:
 
 ```sh
-scripts/package.sh
+cmake -S . -B build-headless -DGAMES_BUILD_UI=OFF -DCMAKE_BUILD_TYPE=Release
+cmake --build build-headless --parallel 4
+ctest --test-dir build-headless --output-on-failure
 ```
 
-On macOS, this verifies the build and creates `dist/Slingshot-Valley-macOS.zip`, containing the app and its assets. This is a local unsigned app, not an App Store or notarized release. The Linux package path exists but is subject to the Linux CI result; local verification was on Apple Silicon macOS.
+The shared environment executable is `build-headless/bin/game-env`.
 
-## Source
+## Python runtime
 
-- `src/main.cpp`: application flow, input, menus, campaign map, HUD, and results.
-- `src/presentation.*`: character sprites, environments, materials, effects, fonts, and synthesized sound/music.
-- `src/simulation.*`: physics, turns, impact damage, explosions, and bird abilities.
-- `src/levels.*`: authored level compositions, bird loadouts, and star thresholds.
-- `src/progress.*` and `src/save_worker.*`: player records, atomic saves and bounded background persistence.
-- `src/graphics.*` and `src/runtime.h`: resource owners, physical-resolution rendering, thread guards and fixed pools.
-- `tests/runtime_test.cpp`: memory budgets, resource ownership and concurrency checks.
-- `tests/simulation_test.cpp`: campaign and persistence regression tests.
-
-Visual references: the official Angry Birds and Rovio game pages. The project includes generated scenery and character art; see `docs/art-direction.md` for prompts and provenance. Font licenses and library notices are bundled with the assets.
-
-Detailed verification evidence and release limits: `docs/verification.md`.
-
-Sanitizer builds:
+Python 3.10+ is required. The base runtime has no third-party Python dependencies.
 
 ```sh
-cmake -S . -B build-asan -DCMAKE_BUILD_TYPE=Debug -DSLINGSHOT_SANITIZER=address
-cmake --build build-asan --parallel 4
-ctest --test-dir build-asan --output-on-failure
-cmake -S . -B build-tsan -DCMAKE_BUILD_TYPE=Debug -DSLINGSHOT_SANITIZER=thread
-cmake --build build-tsan --target runtime-tests --parallel 4
-ctest --test-dir build-tsan -R runtime --output-on-failure
+python3 -m venv research/.venv
+. research/.venv/bin/activate
+python -m pip install -e research
+tiny-rsi --help
+python -m unittest discover -s research/tests -p '*test*.py'
 ```
 
-Measured v0.3 frame times, memory tradeoffs and raw benchmark output: `docs/performance.md`.
+Development can also use `PYTHONPATH=research/src python3 -m tiny_rsi --help`.
+Actual model/game-agent execution requires the provisioned, sealed Linux guest.
+Unit tests use mocks and synthetic numerical data; native contract tests exercise
+physics without a model.
 
-## Two-game AI research platform
+## Run local Ollama agents in a VM
 
-The Ascent is now included under `games/getting-over-it` with its Git history.
-Both native games build from the root CMake project. The guest-only Ollama actor,
-headless environment protocol, isolated VM setup and research roadmap are in
-[agent/README.md](agent/README.md). Run `agent/scripts/worker.sh` for usage.
+Install Lima (`brew install lima` on Apple Silicon macOS), then:
+
+```sh
+scripts/worker.sh start
+scripts/worker.sh deploy
+MODEL_ROLE=teacher scripts/worker.sh pull
+MODEL_ROLE=student scripts/worker.sh pull
+scripts/worker.sh seal
+MODEL_ROLE=teacher scripts/worker.sh run angry-birds 32
+MODEL_ROLE=student scripts/worker.sh run getting-over-it 32
+```
+
+Deployment requires a clean committed revision and transfers a Git archive, not
+a live host mount. The default inference guest reserves 6 GiB RAM; the optional
+execution guest reserves 2 GiB. Ollama loads one model at a time. Both defaults
+fit within the 16 GiB host budget. New-worker creation requires 12 GiB free disk.
+Use `scripts/worker.sh stop` or `scripts/lab.sh stop execution` to free resources.
+
+## Model roles and current scope
+
+Teacher, student, evaluator and researcher refer to **actual Ollama model
+invocations**, configured in [config/models.json](config/models.json). Development
+assistants are only writing and testing the code; they are not these models.
+The evaluator model may critique a trajectory, but native game outcomes and the
+fixed evaluation code remain authoritative.
+
+The repository also contains a physics-search planner and tiny neural/tree
+policy baselines. They are explicitly supporting tools/experiments, **not** the
+intended Ollama teacher or student models. `plan`, `policy-train`, and
+`policy-experiment` expose those baselines. Their measured gains do not establish
+that an Ollama language model's weights improved. Language-model distillation is
+a separate implementation path, and few-shot prompting is not weight training.
+
+Read [the research runtime guide](research/README.md),
+[architecture and isolation boundaries](docs/architecture.md), and
+[the native protocol](environments/native/PROTOCOL.md).
+Historical traces retain their original model identities, code revisions and
+paths; reorganizing the repository does not rewrite past evidence.
