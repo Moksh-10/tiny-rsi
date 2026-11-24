@@ -3,7 +3,8 @@ import importlib
 import sys
 
 COMMANDS = {'play': 'actor', 'plan': 'planner', 'policy-train': 'policy',
-            'evaluate': 'evaluation', 'policy-experiment': 'policy_experiments', 'replay': 'replay'}
+            'evaluate': 'evaluation', 'policy-experiment': 'policy_experiments', 'replay': 'replay', 'teacher-collect': 'model_teacher',
+            'distill': 'distillation', 'model-evaluate': 'model_evaluation'}
 
 
 def main():

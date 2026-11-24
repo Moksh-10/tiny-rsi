@@ -43,7 +43,8 @@ class FakeEngine:
     def reset(self, seed=None):
         self.state = {'ok': True, 'protocol': 1, 'game': self.game,
                       'observation': {'phase': 'aiming', 'ability_ready': False,
-                                      'position': [1.23456789, 2], 'score': 0},
+                                      'position': [1.23456789, 2], 'score': 0,
+                                      'next_bird': 'red', 'birds_left': 3, 'pigs_left': 2, 'entities': []},
                       'reward': 0, 'terminated': False, 'truncated': False,
                       'info': {'ticks': 0, 'success': False}}
         return copy.deepcopy(self.state['observation']), dict(self.state['info'])
@@ -150,7 +151,8 @@ class ActorTests(unittest.TestCase):
         self.assertEqual(events[0]['digest'], 'a' * 64)
         self.assertEqual(len(events[0]['engine_sha256']), 64)
         self.assertEqual(events[1]['response']['observation']['position'][0], 1.23456789)
-        self.assertIn('1.235', FakeClient.calls[-1][1]['messages'][1]['content'])
+        self.assertIn('\"pigs\"', FakeClient.calls[-1][1]['messages'][1]['content'])
+        self.assertNotIn('1.23456789', FakeClient.calls[-1][1]['messages'][1]['content'])
         self.assertTrue(FakeEngine.instances[0].closed)
         with self.assertRaises(FileExistsError):
             self.run_episode()

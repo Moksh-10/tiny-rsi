@@ -24,6 +24,7 @@ from typing import Any
 from .environment import GameEnvironment, require_worker
 from .researcher import OllamaResearcher
 from .models import default_model, load_roles
+from .prompts import messages_for_state, PROMPT_VERSION
 
 DEFAULT_MODEL = 'qwen2.5:3b'
 MAX_ACTION_BYTES = 16384
@@ -203,7 +204,7 @@ def play_episode(executable: str, output: str, *, model=DEFAULT_MODEL,
             'revision': os.environ.get('TINY_RSI_REVISION', 'development'),
             'engine_sha256': None, 'digest': None, 'ollama_version': None,
             'capabilities': None, 'game': game, 'level': level,
-            'track': 'structured-state', 'started': datetime.now(timezone.utc).isoformat(),
+            'track': 'structured-state', 'prompt_version': PROMPT_VERSION, 'started': datetime.now(timezone.utc).isoformat(),
             'max_steps': steps, 'token_budget': tokens, 'timeout_seconds': timeout,
             'options': options,
         }
@@ -246,21 +247,22 @@ def play_episode(executable: str, output: str, *, model=DEFAULT_MODEL,
                 state = copy.deepcopy(engine.state)
                 reset_request = {'op': 'reset', 'game': game, 'level': level}
                 record({'event': 'reset', 'request': reset_request, 'response': state})
-                system = _instructions(game, description)
+                system = messages_for_state(game,state)[0]['content']
                 last = ''
                 for decision in range(steps):
                     if _done(state):
                         reason = 'environment_finished'
                         break
-                    observation = json.dumps(compact(state), sort_keys=True, separators=(',', ':'), allow_nan=False)
+                    messages = messages_for_state(game,state)
+                    observation = messages[1]['content']
                     if used + len(system) + len(observation) + len(last) + 1024 > tokens:
                         reason = 'token_budget'
                         break
-                    content = observation + ('\nPrevious attempt: ' + last if last else '')
+                    if last:
+                        messages[1]['content'] += '\nRejected: ' + last[:256]
                     body = {
                         'model': model, 'stream': False, 'format': action_schema(game, state),
-                        'messages': [{'role': 'system', 'content': system},
-                                     {'role': 'user', 'content': content}],
+                        'messages': messages,
                         'options': options, 'keep_alive': '5m',
                     }
                     decision_started = time.monotonic()
@@ -310,7 +312,7 @@ def play_episode(executable: str, output: str, *, model=DEFAULT_MODEL,
                         state = copy.deepcopy(native_response)
                         engine.state = copy.deepcopy(native_response)
                         executed += 1
-                        last = 'action=' + raw
+                        last = ''
                     if _done(state):
                         reason = 'environment_finished'
                         break

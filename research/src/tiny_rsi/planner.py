@@ -75,6 +75,9 @@ class PlanningPolicy:
         self.history: list[Action] = []
         self.queue: list[Action] = []
         self.warm: list[Action] = []
+        self._last_label: Action | None = None
+        self._expected_observation: dict | None = None
+        self._expected_tick: int | None = None
         self.stats = dict(candidate_rollouts=0, oracle_actions=0, oracle_ticks=0,
                           oracle_resets=0, oracle_reset_ticks=0, budget_exhausted=False)
 
@@ -108,20 +111,58 @@ class PlanningPolicy:
             if _terminal(self.oracle.state):
                 raise RuntimeError("actual prefix ended before teacher decision")
             self._act(action)
+        if self._expected_observation is not None:
+            actual = self.oracle.state["observation"]
+            if any(actual.get(key) != value for key, value in self._expected_observation.items()):
+                raise RuntimeError("planning oracle prefix differs from the actual public observation")
+        if self._expected_tick is not None and self.oracle.state["info"].get("ticks") != self._expected_tick:
+            raise RuntimeError("planning oracle prefix has different simulation time")
         for action in suffix:
             if _terminal(self.oracle.state):
                 break
             self._act(action)
         return self.oracle.state
 
-    def __call__(self, observation: dict, info: dict | None = None) -> Action:
+    def label(self, observation: dict, info: dict | None = None) -> Action:
+        """Suggest a public action without claiming it was executed.
+
+        After the caller validates and executes its chosen action, it must call
+        observe_action with that ACTUAL accepted action. Rejected actions never
+        advance history. This is required for tool-assisted actors and DAgger.
+        """
+        if not isinstance(observation, dict):
+            raise ValueError("public observation object required")
+        if self._last_label is not None:
+            # An unexecuted/rejected recommendation must not retain its continuation.
+            self.queue.clear()
+            self.warm.clear()
+        self._expected_observation = copy.deepcopy(observation)
+        self._expected_tick = info.get("ticks") if isinstance(info, dict) else None
         if self.game == "angry-birds":
             action = self._birds(observation)
         else:
             action = self._ascent(observation)
-        result = copy.deepcopy(action)
-        self.history.append(result)
-        return result
+        self._last_label = copy.deepcopy(action)
+        return copy.deepcopy(action)
+
+    def observe_action(self, action: Action) -> None:
+        """Record one already engine-accepted action, never a hypothetical label."""
+        if not isinstance(action, dict):
+            raise ValueError("accepted action object required")
+        if action != self._last_label:
+            # Cached continuations were computed for another first action.
+            self.queue.clear()
+            self.warm.clear()
+        self.history.append(copy.deepcopy(action))
+        self._last_label = None
+        self._expected_observation = None
+        self._expected_tick = None
+
+    def __call__(self, observation: dict, info: dict | None = None) -> Action:
+        """Legacy direct-planning policy; caller promises to execute this action."""
+        action = self.label(observation, info)
+        self.observe_action(action)
+        return action
 
     @staticmethod
     def _bird_value(state: dict) -> tuple:

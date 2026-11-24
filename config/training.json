@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "base": {
+    "repository": "Qwen/Qwen2.5-0.5B-Instruct",
+    "revision": "eaa56b503cc0a8a4d15de1dd8bd2a7e95a716be2",
+    "weights_sha256": "fdf756fa7fcbe7404d5c60e26bff1a0c8b8aa1f72ced49e7dd0210fe288fb7fe"
+  },
+  "packages": {
+    "torch": "2.11.0+cpu",
+    "transformers": "5.24.0",
+    "peft": "0.22.0",
+    "accelerate": "1.16.0",
+    "safetensors": "0.8.0"
+  },
+  "converter_commit": "2a487782f2f218bc6c01e1f366a7e73f002faf08",
+  "quantization": "Q4_K_M",
+  "cpu_threads": 2,
+  "probe_steps": 2,
+  "sequence_length": 256,
+  "lora_rank": 4,
+  "lora_targets": ["q_proj", "v_proj"],
+  "minimum_host_free_gib": 20
+}

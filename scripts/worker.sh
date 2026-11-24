@@ -50,6 +50,7 @@ cd /opt/game-research/current
 cmake -S . -B build -DGAMES_BUILD_UI=OFF -DCMAKE_BUILD_TYPE=Release
 cmake --build build --parallel 4
 ctest --test-dir build --output-on-failure
+PYTHONPATH=research/src python3 -m unittest discover -s research/tests -p '*test*.py'
 printf '%s\n' "$REV" > /opt/game-research/REVISION
 ln -sfn "/opt/game-research/current/build/bin" /opt/game-research/build
 GUEST

@@ -16,6 +16,9 @@ tiny-rsi policy-train --help
 tiny-rsi evaluate --help
 tiny-rsi policy-experiment --help
 tiny-rsi replay --help
+tiny-rsi teacher-collect --help
+tiny-rsi distill --help
+tiny-rsi model-evaluate --help
 ```
 
 - `play`: actual Ollama model gameplay, with explicit teacher/student/evaluator
@@ -94,3 +97,30 @@ bash -n scripts/*.sh sandbox/scripts/*.sh
 The native protocol integration tests live under `environments/native/tests`;
 per-game physics/persistence tests live with each game. Archived early baselines
 are under [../experiments/baselines](../experiments/baselines).
+
+## Actual language-model distillation
+
+`teacher-collect` calls the configured Ollama teacher, exposes a bounded planning
+recommendation as a tool result, and executes the model's returned action. Its
+public student prompt excludes that recommendation. `distill` requires verified
+teacher-response rows, trains frozen-base CPU LoRA for the actual 0.5B language
+model, and exports adapter provenance plus merged Safetensors. Heavy imports are
+lazy; the standard package and tests do not require Torch.
+
+`scripts/training.sh setup` provisions the separate guest training virtualenv,
+checks dependency plans for GPU packages, downloads a pinned and SHA256-verified
+0.5B base, and builds a fixed llama.cpp converter/quantizer. It requires at least
+20 GiB free host space and refuses maintenance during any agent job. Explicit
+CPU-index Torch avoids accidental CUDA downloads on Linux ARM64.
+
+The installed Ollama version rejects direct `ADAPTER` imports. Deployment must
+merge LoRA into the pinned base, convert/quantize both the untrained and trained
+models with the same recipe, then import standalone GGUF models. Identical
+prompts, templates, quantization, game cases and budgets are required for paired
+comparison. `model-evaluate` records actual model identities; without a matching
+training/conversion manifest it cannot claim a verified weight update or promote
+a candidate. The evaluator-model critic is advisory and excludes held-out data.
+
+A source implementation and mocked tests do not prove successful training or
+improvement. Real completed training metrics, imported model digests and game
+results must be produced before those claims are made.

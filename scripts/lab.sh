@@ -55,7 +55,7 @@ GUEST
   ;;
  run)
   MODULE=${3:?module required}; shift 3
-  case "$MODULE" in planner|evaluation|policy|policy_experiments|researcher|actor) ;; *) echo 'unsupported research entry point' >&2; exit 2;; esac
+  case "$MODULE" in planner|evaluation|policy|policy_experiments|researcher|actor|model_teacher|model_evaluation) ;; *) echo 'unsupported research entry point' >&2; exit 2;; esac
   limactl shell "$VM" sudo bash /opt/game-research/lab/sandbox/verify.sh "$ROLE"
   UNIT="game-lab-${MODULE}-$(date +%s)-$$"
   limactl shell "$VM" sudo systemd-run --unit="$UNIT" --wait --pipe --collect \
