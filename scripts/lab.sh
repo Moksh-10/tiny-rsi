@@ -60,6 +60,7 @@ GUEST
   UNIT="game-lab-${MODULE}-$(date +%s)-$$"
   limactl shell "$VM" sudo systemd-run --unit="$UNIT" --wait --pipe --collect \
     -p User=researcher -p Group=researcher -p WorkingDirectory=/opt/game-research/lab \
+    --setenv=TINY_RSI_REVISION="$(git -C "$ROOT" rev-parse HEAD)" \
     --setenv=TINY_RSI_MODEL_CONFIG=/opt/game-research/lab/config/models.json \
     -p NoNewPrivileges=yes -p ProtectSystem=strict -p ProtectHome=yes -p PrivateTmp=yes \
     -p ReadWritePaths=/var/lib/game-research/results -p MemoryMax=768M -p TasksMax=64 \

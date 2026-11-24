@@ -18,7 +18,8 @@ def compact_system(game):
 
 
 def _pair(value, digits=2):
-    return [round(float(value[0]), digits), round(float(value[1]), digits)]
+    rounded = [round(float(value[0]), digits), round(float(value[1]), digits)]
+    return [int(number) if number == int(number) else number for number in rounded]
 
 
 def compact_observation(game, state):

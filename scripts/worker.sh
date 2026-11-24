@@ -38,7 +38,7 @@ case ${1:-help} in
   limactl shell "$VM" sudo bash -s -- "$REV" <<'GUEST'
 set -euo pipefail
 REV=$1
-if systemctl is-active --quiet game-rollout.service || systemctl list-units --state=running --no-legend 'game-lab-*' | grep . >/dev/null; then echo "Rollout active" >&2; exit 1; fi
+if systemctl is-active --quiet game-rollout.service || systemctl list-units --state=running --no-legend 'game-lab-*' 'game-training-*' | grep . >/dev/null; then echo "Rollout active" >&2; exit 1; fi
 rm -f /run/game-research/sealed
 if nft list table inet game_research >/dev/null 2>&1; then nft delete table inet game_research; fi
 mkdir -p /opt/game-research/releases
@@ -59,7 +59,7 @@ GUEST
   # Maintenance mode only, never concurrent with a running rollout.
   limactl shell "$VM" sudo bash -s -- "$MODEL" <<'GUEST'
 set -euo pipefail
-if systemctl is-active --quiet game-rollout.service || systemctl list-units --state=running --no-legend 'game-lab-*' | grep . >/dev/null; then echo 'Rollout active' >&2; exit 1; fi
+if systemctl is-active --quiet game-rollout.service || systemctl list-units --state=running --no-legend 'game-lab-*' 'game-training-*' | grep . >/dev/null; then echo 'Rollout active' >&2; exit 1; fi
 rm -f /run/game-research/sealed
 if nft list table inet game_research >/dev/null 2>&1; then nft delete table inet game_research; fi
 /usr/bin/ollama pull "$1"

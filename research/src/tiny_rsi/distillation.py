@@ -370,7 +370,7 @@ def train(base, data, output, *, steps=2, max_seconds=180, sequence_length=256,
             from transformers import AutoTokenizer, AutoModelForCausalLM
             from peft import LoraConfig, TaskType, get_peft_model
             report['dependencies'] = _dependency_versions()
-            torch.set_num_threads(min(4, os.cpu_count() or 1))
+            torch.set_num_threads(min(2, os.cpu_count() or 1))
             torch.set_num_interop_threads(1)
             torch.manual_seed(seed)
             torch.use_deterministic_algorithms(True)

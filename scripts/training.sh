@@ -22,7 +22,7 @@ rm -f /run/game-research/sealed
 if nft list table inet game_research >/dev/null 2>&1; then nft delete table inet game_research; fi
 export DEBIAN_FRONTEND=noninteractive
 apt-get update
-apt-get install -y python3-venv git cmake build-essential
+apt-get -o DPkg::Lock::Timeout=180 install -y python3-venv git cmake build-essential
 install -d -m 0755 /opt/game-research/training /var/lib/game-research/models
 install -m 0444 /tmp/tiny-rsi-training.json /opt/game-research/training/config.json
 rm /tmp/tiny-rsi-training.json
